@@ -1,0 +1,16 @@
+{
+	"ProcessName": "TibiaBR",
+	"InitialUrl": "https://forums.tibiabr.com",
+	"SectionXPath": ".//div[@class='forumrow table']",
+	"SectionsList": ",",
+	"Host": "forums.tibiabr.com",
+	"KeepAlive": true,
+	"Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8",
+	"UserAgent": "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.90 Safari/537.36 OPR/47.0.2631.71",
+	"ContentType": "",
+	"Charset": "ISO-8859-1",
+	"Timeout" : 30000,
+	"AcceptEncoding": "Accept-Encoding: gzip, deflate, br",
+	"AcceptLanguage": "Accept-Language: pt-BR,pt;q=0.8,en-US;q=0.6,en;q=0.4",
+	"TargetQueue": "ForumTibiaBR_SectionQueuer"
+}

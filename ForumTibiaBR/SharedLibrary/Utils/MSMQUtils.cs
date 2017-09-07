@@ -38,6 +38,23 @@ namespace SharedLibrary.Utils
             return messageQueue;
         }
 
+        public bool DeleteContentPrivateQueue (string queuename)
+        {
+            queuename = String.Concat(MSMQPrivatePath, queuename);
+
+            // Does the queue exist?
+            if (MessageQueue.Exists(queuename))
+            {
+                MessageQueue queue = new MessageQueue(queuename);
+
+                queue.Purge();
+                queue.Dispose();
+
+                return true;
+            }
+            return false;
+        }
+
         public bool DeletePrivateQueue(string queuename)
         {
             queuename = String.Concat(MSMQPrivatePath, queuename);
@@ -45,17 +62,9 @@ namespace SharedLibrary.Utils
             // Does the queue exist?
             if (MessageQueue.Exists(queuename))
             {
-                try
-                {
-                    MessageQueue.Delete(queuename);
-                    return true;
-                }
-                catch (Exception ex)
-                {
-
-                }
+                MessageQueue.Delete(queuename);
+                return true;
             }
-
             return false;
         }
     }

@@ -23,7 +23,7 @@ namespace Bootstrapper
         public static void Main(string[] args)
         {
             // Loading New Logger
-            logger = LogManager.GetLogger("BootstrapperLog");
+            logger = LogManager.GetCurrentClassLogger();
 
             logger.Info("Start");
 
@@ -37,7 +37,22 @@ namespace Bootstrapper
                 logger.Fatal("Error parsing configuration file! Aborting...");
                 Environment.Exit(-101);
             }
-            
+
+            try
+            {
+                Execute(logger);
+            }
+            catch (Exception ex)
+            {
+                logger.Fatal(ex,"General Exception. \"Execute\" Method");
+                Console.Write("Press any key...");
+                Console.ReadKey();
+            }
+        }
+
+
+        private static void Execute(Logger logger)
+        {
             // Initialization WebRequests
             WebRequests client = new WebRequests();
             SharedLibrary.Utils.WebRequestsUtils.InitializeWebRequest(Config.InitialUrl,out client, Config);
@@ -49,45 +64,56 @@ namespace Bootstrapper
             if (String.IsNullOrWhiteSpace(htmlResponse))
             {
                 logger.Fatal("HtmlResponse is null or empty");
-                System.Environment.Exit(-102);
+                Environment.Exit(-101);
             }
+
+            client.Dispose();
 
             // Loading HTML into MAP
             HtmlDocument map = new HtmlDocument();
             map.LoadHtml(htmlResponse);
 
-            logger.Debug("Scraping section urls");
 
-            //Scrape Urls and Build
+
+            //Scrape Urls
+            logger.Debug("Scraping section urls");
             List<Section> sections = ScrapeSections(map);
 
             if (sections == null || sections.Count == 0)
             {
                 logger.Fatal("Couldn't build any section object. Aborting program");
-                System.Environment.Exit(-103);
+                Environment.Exit(-103);
             }
+
 
             // Send messages to Queue
             SendMessage(Config.TargetQueue, sections);
 
-            client.Dispose();
             logger.Info("End");
         }
 
-        
         private static void SendMessage(string queuename, List<Section> sections)
         {
             MSMQUtils MSMQ = new MSMQUtils();
 
-            MessageQueue queue = MSMQ.OpenPrivateQueue(queuename, "Bootstrapper");
+            // Trying to open the queue
+            MessageQueue queue = MSMQ.OpenPrivateQueue(queuename, typeof(Program).Namespace);
 
+            // Sanit check
             if (queue == null)
             {
-                //Printar error
+                logger.Fatal("Error to open a private queue. The field \"queue\" is null.");
                 return;
             }
 
+            // Iterate over all sections
+            foreach (Section section in sections)
+            {
+               string serializedSection = Utils.Compress(JsonConvert.SerializeObject(section));
+                queue.Send(serializedSection);
+            }
 
+            queue.Dispose();
         }
 
         private static List<Section> ScrapeSections(HtmlDocument map)
@@ -106,6 +132,7 @@ namespace Bootstrapper
             // Iterate over all section urls
             foreach (HtmlNode node in secNodes)
             {
+                // Section Parser with some information
                 Section section = ParseSectionInitInfo(node);
 
                 if (section != null)
@@ -117,7 +144,6 @@ namespace Bootstrapper
             }
 
             return sectionObjects;
-
         }
 
         private static Section ParseSectionInitInfo(HtmlNode node)
@@ -229,6 +255,7 @@ namespace Bootstrapper
             try {  Config = JsonConvert.DeserializeObject<BootstrapperConfig>(File.ReadAllText(ConfigFilePath)); }
             catch (Exception ex)
             {
+                logger.Fatal(ex,"Error to deserialize json object");
                 return false;
             }
 

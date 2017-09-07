@@ -50,27 +50,12 @@ namespace SharedLibrary.Utils
             if ((strInput.StartsWith("{") && strInput.EndsWith("}")) || //For object
                 (strInput.StartsWith("[") && strInput.EndsWith("]")))   //For array
             {
-                try
-                {
-                    var obj = JToken.Parse(strInput);
-                    return true;
-                }
-                catch (JsonReaderException jex)
-                {
-                    //Exception in parsing json
-                    Console.WriteLine(jex.Message);
-                    return false;
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine(ex.ToString());
-                    return false;
-                }
+               
+                JToken obj = JToken.Parse(strInput);
+                return true;
             }
             else
-            {
                 return false;
-            }
         }
 
         /// <summary>
@@ -79,18 +64,13 @@ namespace SharedLibrary.Utils
         public static string AbsoluteUri(string baseuri, string relativeuri)
         {
             string result = string.Empty;
-            try
-            {
-                if(!baseuri.StartsWith("https"))
-                    baseuri = String.Concat("https://", baseuri);
 
-                result = (new Uri(new Uri(baseuri), relativeuri)).AbsoluteUri;
-                result = HttpUtility.HtmlDecode(HttpUtility.UrlDecode(result));
-            }
-            catch (Exception ex)
-            {
-            }
+            if(!baseuri.StartsWith("https"))
+                baseuri = String.Concat("https://", baseuri);
 
+            result = (new Uri(new Uri(baseuri), relativeuri)).AbsoluteUri;
+            result = HttpUtility.HtmlDecode(HttpUtility.UrlDecode(result));
+         
             return result;
         }
 

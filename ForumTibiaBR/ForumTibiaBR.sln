@@ -7,6 +7,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Bootstrapper", "Bootstrappe
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SharedLibrary", "SharedLibrary\SharedLibrary.csproj", "{F7E8D04A-25C4-45AF-82EF-DA4E31A1F241}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SectionsParser", "SectionsParser\SectionsParser.csproj", "{40D2B234-84E4-418C-A225-3A44AFCCA4F7}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -21,6 +23,10 @@ Global
 		{F7E8D04A-25C4-45AF-82EF-DA4E31A1F241}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{F7E8D04A-25C4-45AF-82EF-DA4E31A1F241}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{F7E8D04A-25C4-45AF-82EF-DA4E31A1F241}.Release|Any CPU.Build.0 = Release|Any CPU
+		{40D2B234-84E4-418C-A225-3A44AFCCA4F7}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{40D2B234-84E4-418C-A225-3A44AFCCA4F7}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{40D2B234-84E4-418C-A225-3A44AFCCA4F7}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{40D2B234-84E4-418C-A225-3A44AFCCA4F7}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

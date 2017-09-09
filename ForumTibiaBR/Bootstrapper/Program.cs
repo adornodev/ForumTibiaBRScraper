@@ -16,16 +16,14 @@ namespace Bootstrapper
 {
     public class Program
     {
-        private static Logger logger = null;
         private static string ConfigFilePath;
-        private static BootstrapperConfig Config { get; set; }
+        private static Logger logger = null;
+        private static BootstrapperConfig Config;
 
         public static void Main(string[] args)
         {
             // Loading New Logger
             logger = LogManager.GetCurrentClassLogger();
-
-            logger.Info("Start");
 
             //Initialization AppConfig
             InitializeAppConfig();
@@ -38,8 +36,12 @@ namespace Bootstrapper
                 Environment.Exit(-101);
             }
 
+            // Save input fields
+            SaveFields();
+
             try
             {
+                // Main
                 Execute(logger);
             }
             catch (Exception ex)
@@ -50,9 +52,29 @@ namespace Bootstrapper
             }
         }
 
+        private static void SaveFields()
+        {
+            MSMQUtils MSMQ = new MSMQUtils();
+
+            // Trying to open the queue
+            MessageQueue queue = MSMQ.OpenOrCreatePrivateQueue(Config.WebRequestConfigQueue, typeof(Program).Namespace);
+
+            // Sanit check
+            if (queue == null)
+            {
+                logger.Fatal("Error to open a private WebConfigQueue. The field \"queue\" is null.");
+                return;
+            }
+
+            string serializedConfig = Utils.Compress(JsonConvert.SerializeObject(Config));
+            queue.Send(serializedConfig);
+        }
 
         private static void Execute(Logger logger)
         {
+            logger.Info("Start");
+
+
             // Initialization WebRequests
             WebRequests client = new WebRequests();
             SharedLibrary.Utils.WebRequestsUtils.InitializeWebRequest(Config.InitialUrl,out client, Config);
@@ -97,7 +119,7 @@ namespace Bootstrapper
             MSMQUtils MSMQ = new MSMQUtils();
 
             // Trying to open the queue
-            MessageQueue queue = MSMQ.OpenPrivateQueue(queuename, typeof(Program).Namespace);
+            MessageQueue queue = MSMQ.OpenOrCreatePrivateQueue(queuename, typeof(Program).Namespace);
 
             // Sanit check
             if (queue == null)
@@ -119,6 +141,7 @@ namespace Bootstrapper
         private static List<Section> ScrapeSections(HtmlDocument map)
         {
             List<Section> sectionObjects = new List<Section>();
+           
             // Get section urls
             HtmlNodeCollection secNodes = map.DocumentNode.SelectNodes(Config.SectionXPath);
 
@@ -168,6 +191,9 @@ namespace Bootstrapper
             HtmlNode titleNode = node.SelectSingleNode(".//h2[@class='forumtitle']");
             if (titleNode != null && !String.IsNullOrWhiteSpace(titleNode.InnerText))
                 title = titleNode.InnerText.Trim();
+
+
+            logger.Trace("Processing \"{0}\" Section ...");
 
             // Extract Description
             HtmlNode descriptionNode = node.SelectSingleNode(".//p[@class='forumdescription']");

@@ -12,5 +12,6 @@
 	"Timeout" : 30000,
 	"AcceptEncoding": "Accept-Encoding: gzip, deflate, br",
 	"AcceptLanguage": "Accept-Language: pt-BR,pt;q=0.8,en-US;q=0.6,en;q=0.4",
-	"TargetQueue": "ForumTibiaBR_SectionQueuer"
+	"TargetQueue": "ForumTibiaBR_SectionsQueuer",
+	"WebRequestConfigQueue": "ForumTibiaBR_Config"
 }

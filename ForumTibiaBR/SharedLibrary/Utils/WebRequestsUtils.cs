@@ -13,12 +13,12 @@ namespace SharedLibrary.Utils
 {
     public class WebRequestsUtils
     {
-        public string WebrequestUserAgent      = "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.90 Safari/537.36 OPR/47.0.2631.71";
-        public string WebrequestAccept         = "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8";
-        public string WebrequestAcceptEncoding = String.Empty;
-        public string WebrequestAcceptLanguage = String.Empty;
-        public string WebrequestContentType    = String.Empty;
-        public string WebrequestEncoding       = String.Empty;
+        public static string WebrequestUserAgent      = "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.90 Safari/537.36 OPR/47.0.2631.71";
+        public static string WebrequestAccept         = "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8";
+        public static string WebrequestAcceptEncoding = String.Empty;
+        public static string WebrequestAcceptLanguage = String.Empty;
+        public static string WebrequestContentType    = String.Empty;
+        public static string WebrequestEncoding       = String.Empty;
 
 
         // Randomizer for sleeping logic
@@ -81,7 +81,7 @@ namespace SharedLibrary.Utils
         /// <summary>
         /// Initializes the "webrequest" object
         /// </summary>
-        public void InitializeWebRequest (string url, out WebRequests webreq)
+        public static void InitializeWebRequest (string url, out WebRequests webreq)
         {
             // Create new
             webreq = new WebRequests();

@@ -6,13 +6,12 @@ namespace SharedLibrary.Models
 {
     public class Section
     {
-        //[Required(ErrorMessageResourceType = typeof(SharedLibrary.),ErrorMessageResourceName = "SECTION_ERROR_VALIDATION_Title")]
-        [Required]
+        [Required(ErrorMessageResourceType = typeof(Languages.Language),ErrorMessageResourceName = "SECTION_ERROR_VALIDATION_Title")]
         public string Title         { get; set; }
 
         public string Description   { get; set; }
 
-        [Required]
+        [Required(ErrorMessageResourceType = typeof(Languages.Language), ErrorMessageResourceName = "SECTION_ERROR_VALIDATION_Url")]
         [Url]
         public string Url           { get; set; }
 

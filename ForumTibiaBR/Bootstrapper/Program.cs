@@ -47,9 +47,10 @@ namespace Bootstrapper
             catch (Exception ex)
             {
                 logger.Fatal(ex,"General Exception. \"Execute\" Method");
-                Console.Write("Press any key...");
-                Console.ReadKey();
             }
+
+            Console.Write("Press any key...");
+            Console.ReadKey();
         }
 
         private static void SaveFields()
@@ -98,7 +99,7 @@ namespace Bootstrapper
 
 
             //Scrape Urls
-            logger.Debug("Scraping section urls");
+            logger.Trace("Scraping section urls");
             List<Section> sections = ScrapeSections(map);
 
             if (sections == null || sections.Count == 0)
@@ -131,7 +132,9 @@ namespace Bootstrapper
             // Iterate over all sections
             foreach (Section section in sections)
             {
-               string serializedSection = Utils.Compress(JsonConvert.SerializeObject(section));
+                logger.Trace("Sending " + section.Title + " to " + queuename + " queue");
+
+                string serializedSection = Utils.Compress(JsonConvert.SerializeObject(section));
                 queue.Send(serializedSection);
             }
 
@@ -148,7 +151,7 @@ namespace Bootstrapper
             // Sanity Check
             if (secNodes == null || secNodes.Count == 0)
             {
-                logger.Warn("Section nodes could not be found");
+                logger.Error("Section nodes could not be found");
                 return null;
             }
 
@@ -193,7 +196,7 @@ namespace Bootstrapper
                 title = titleNode.InnerText.Trim();
 
 
-            logger.Trace("Processing \"{0}\" Section ...");
+            logger.Trace("Processing \"{0}\" Section ...", title);
 
             // Extract Description
             HtmlNode descriptionNode = node.SelectSingleNode(".//p[@class='forumdescription']");
@@ -204,7 +207,10 @@ namespace Bootstrapper
             if (relevantSections.Length >= 1)
             {
                 if (!relevantSections.Any(title.Contains))
+                {
+                    logger.Trace("The " + title + " section wasn't processed");
                     return null;
+                }
             }
 
             // Extract URL

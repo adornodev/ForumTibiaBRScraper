@@ -123,4 +123,7 @@
   <data name="SECTION_ERROR_VALIDATION_Url" xml:space="preserve">
     <value>The field {0} must be filled!</value>
   </data>
+  <data name="TOPIC_ERROR_VALIDATION_NumberOfSectionPage" xml:space="preserve">
+    <value>The field {0} must have value more or equal than 1.</value>
+  </data>
 </root>

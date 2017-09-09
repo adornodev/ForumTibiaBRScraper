@@ -123,4 +123,7 @@
   <data name="SECTION_ERROR_VALIDATION_Url" xml:space="preserve">
     <value>O campo {0} deve ser preenchido!</value>
   </data>
+  <data name="TOPIC_ERROR_VALIDATION_NumberOfSectionPage" xml:space="preserve">
+    <value>O campo {0} tem que ter valor maior que 1.</value>
+  </data>
 </root>

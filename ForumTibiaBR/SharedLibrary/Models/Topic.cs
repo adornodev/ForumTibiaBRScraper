@@ -28,7 +28,7 @@ namespace SharedLibrary.Models
         [Required]
         public int          NumberOfViews           { get; set; }
 
-        public string       Evaluation              { get; set; }
+        public double       Evaluation              { get; set; }
         public string       LastPostUsername        { get; set; }
         public DateTime     LastPostPublishDate     { get; set; }
         public string       Status                  { get; private set; }

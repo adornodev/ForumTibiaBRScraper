@@ -72,6 +72,9 @@ namespace SectionsParser
             Section section;
             while ( (section = ReadQueue(SectionsQueuerQueueName)) != null)
             {
+                if (section == null)
+                    break;
+
                 logger.Trace("Processing \"{0}\" section ...", section.Title);
 
                 // Parse Sections
@@ -225,9 +228,7 @@ namespace SectionsParser
 
                 // Complete Href
                 if (!topic.Url.StartsWith("http"))
-                {
                     topic.Url = Utils.AbsoluteUri(Config.Host, topic.Url);
-                }
 
                 // Extract Status
                 HtmlNode statusNode = topicNode.SelectSingleNode(".//span[@class='prefix understate']");
@@ -236,6 +237,32 @@ namespace SectionsParser
                 else
                     topic.StatusId = Enums.Status.Normal;
 
+                // Extract Author and PublishDate
+                HtmlNode authorNode = topicNode.SelectSingleNode(".//a[contains(@class,'username')]");
+                if (authorNode != null && authorNode.Attributes["title"] != null && !String.IsNullOrWhiteSpace(authorNode.Attributes["title"].Value))
+                {
+                    topic.Author = authorNode.InnerText.Trim();
+                    if (authorNode.Attributes["title"].Value.Contains("em"))
+                    {
+                        string publishDate = authorNode.Attributes["title"].Value.Split(new[] { "em" }, StringSplitOptions.RemoveEmptyEntries)[1];
+
+                        DateTime dateTime = FormatDateTime(publishDate.Trim());
+                        if (dateTime != DateTime.MinValue)
+                        {
+                            topic.PublishDate = dateTime;
+                        }
+                    }
+                }
+
+                // Extract Evaluation
+                HtmlNode evaluationNode = topicNode.SelectSingleNode(".//ul[contains(@class,'threadstats')]/li[@class='hidden']");
+                if (evaluationNode != null && !String.IsNullOrWhiteSpace(evaluationNode.InnerText))
+                {
+                    // InnerText -> 
+                    double evaluation = GetEvaluation(evaluationNode.InnerText);
+                    if (evaluation >= 0)
+                        topic.Evaluation = evaluation;
+                }
 
 
             }
@@ -266,9 +293,86 @@ namespace SectionsParser
             catch (MessageQueueException mqex)
             {
                 logger.Fatal(mqex, mqex.Message);
+                section = null;
             }
 
             return section;
+        }
+
+
+        /// <summary>
+        /// Example: Avaliação4 / 5
+        /// </summary>
+        private static double GetEvaluation(string text)
+        {
+            int evaluation = -1;
+            int total      = -1;
+
+            double result  = -1.0;
+
+            try
+            {
+                string[] data;
+                if (text.Contains("/"))
+                {
+                    data       = text.Split(new[] { "/" }, StringSplitOptions.RemoveEmptyEntries);
+
+                    evaluation = Int32.Parse(String.Join("", data[0].Where(c => Char.IsDigit(c))));
+                    total      = Int32.Parse(String.Join("", data[1].Where(c => Char.IsDigit(c))));
+
+                    result = (double)evaluation / total;
+                }
+
+            }
+            catch(Exception ex)
+            {
+                logger.Error(ex,"Error to get Evaluation");
+                result = -1.0;
+            }
+
+            return result;
+        }
+
+        /// <summary>
+        /// Date Example:
+        ///  19-09-2004 17:01
+        /// </summary>
+        private static DateTime FormatDateTime(string publishDate)
+        {
+            string date     = String.Empty;
+            string time     = String.Empty;
+            string hour     = String.Empty;
+            string minute   = String.Empty;
+
+            publishDate = publishDate.ToUpper();
+            DateTime formatedDateTime;
+            try
+            {
+                string [] separator = new string[] { " " };
+
+                date = publishDate.Split(separator, StringSplitOptions.None)[0].Trim();
+                time = publishDate.Split(separator, StringSplitOptions.None)[1].Trim();
+
+                if (time.Contains(":"))
+                {
+                    hour    = time.Split(':')[0].Trim();
+                    minute  = time.Split(':')[1].Trim();
+                }
+                else if (time.Contains("H"))
+                {
+                    hour    = time.Split('H')[0].Trim();
+                    minute  = time.Split('H')[1].Trim();
+                }
+
+                formatedDateTime = new DateTime(Int32.Parse(date.Split('-')[2].Trim()), Int32.Parse(date.Split('-')[1].Trim()), Int32.Parse(date.Split('-')[0].Trim()), Int32.Parse(hour), Int32.Parse(minute), 0);
+                formatedDateTime = TimeZoneInfo.ConvertTimeToUtc(formatedDateTime);
+            }
+            catch
+            {
+                return DateTime.MinValue;
+            }
+
+            return formatedDateTime;
         }
     }
 }

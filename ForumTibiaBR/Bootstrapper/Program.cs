@@ -180,7 +180,13 @@ namespace Bootstrapper
             int numberOfViews   = 0;
             int numberOfTopics  = 0;
 
-            string[] relevantSections = Config.SectionsList.Split(new[] { "," }, StringSplitOptions.RemoveEmptyEntries);
+            // Is there a section filter?
+            string[] relevantSections = null;
+
+            if (Config.SectionsList.Contains(","))
+                relevantSections = Config.SectionsList.Split(new[] { "," }, StringSplitOptions.RemoveEmptyEntries);
+            else if (!String.IsNullOrWhiteSpace(Config.SectionsList))
+                relevantSections = new[] { Config.SectionsList.Trim() };
 
             // Check relevantSections
             if (relevantSections == null)

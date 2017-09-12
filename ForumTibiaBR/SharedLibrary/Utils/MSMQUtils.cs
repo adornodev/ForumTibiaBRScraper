@@ -39,7 +39,7 @@ namespace SharedLibrary.Utils
             return messageQueue;
         }
 
-        public Object ReadPrivateQueue (string queuename, int timeoutInMinutes = 5, bool persist = false)
+        public Object ReadPrivateQueue (string queuename, int timeoutInMinutes = 2, bool persist = false)
         {
 
             MessageQueue messageQueue = null;

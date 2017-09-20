@@ -14,11 +14,16 @@ using WebUtilsLib;
 
 namespace SectionsParser
 {
-    public class Program
+    public class SectionsParser
     {
+        #region Private Attributes
+
+        private static string Source = "TibiaBR";
+
         private static Logger logger = null;
         private static string SectionsQueuerQueueName;
         private static string SectionsParserQueueName;
+        private static string TopicsRawDataQueueName;
         private static string ConfigurationQueueName;
         private static BootstrapperConfig Config;
         
@@ -28,6 +33,9 @@ namespace SectionsParser
             {"SectionTopics"        ,   "https://forums.tibiabr.com/forums/{0}/page{1}?pp=50&sort=dateline&order=desc&daysprune=-1" }
         };
 
+        #endregion
+
+
         public static void Main(string[] args)
         {
             // Loading New Logger
@@ -36,27 +44,42 @@ namespace SectionsParser
             //Initialization AppConfig
             InitializeAppConfig();
 
+
             // Get Content of Configuration Queue
-            GetContentConfigurationQueue();
+            try
+            {
+                Config = MSMQUtils.GetContentConfigurationQueue(ConfigurationQueueName);
+            }
+            catch (MessageQueueException mqex)
+            {
+                logger.Fatal(mqex, mqex.Message);
+                goto Exit;
+            }
+
 
             // Sanit Check
             if (Config == null)
             {
                 logger.Fatal("Error to process the Configuration Queue.");
-                Console.Write("Press any key...");
-                Console.ReadKey();
+                goto Exit;
             }
+
 
             try
             {
+                // Main
                 Execute(logger);
             }
             catch (Exception ex)
             {
                 logger.Fatal(ex,"General Exception. \"Execute\" Method");
+                goto Exit;
+            }
+
+
+            Exit:
                 Console.Write("Press any key...");
                 Console.ReadKey();
-            }
         }
 
         private static void Execute(Logger logger)
@@ -67,7 +90,9 @@ namespace SectionsParser
             WebRequests client = new WebRequests();
             InitializeWebRequest(ref client);
 
+            // Lists that will be filled with compressed serialized object
             List<Section> sections = new List<Section>();
+            List<Topic>   topics   = new List<Topic>();
 
             Section section;
             while ( (section = ReadQueue(SectionsQueuerQueueName)) != null)
@@ -78,12 +103,12 @@ namespace SectionsParser
                 logger.Trace("Processing \"{0}\" section ...", section.Title);
 
                 // Parse Sections
-                ParseSections(ref section, client);
+                ParseSections(ref section, ref topics, client);
 
                 // Insert into sections list
                 sections.Add(section);
 
-                if (sections.Count % 10 == 0)
+                if (sections.Count % 5 == 0)
                 {
                     //SendMessage();
                     sections.Clear();
@@ -111,20 +136,28 @@ namespace SectionsParser
 
         }
 
-        private static void GetContentConfigurationQueue()
+        private static void SendMessage(string queuename, List<Topic> topics)
         {
             MSMQUtils MSMQ = new MSMQUtils();
 
-            try
+            // Trying to open the queue
+            MessageQueue queue = MSMQ.OpenOrCreatePrivateQueue(queuename, typeof(SectionsParser).Namespace);
+
+            // Sanit check
+            if (queue == null)
             {
-                object obj  = MSMQ.ReadPrivateQueue(ConfigurationQueueName, persist: true);
-                string json = Utils.Decompress((string)obj);
-                Config      = JsonConvert.DeserializeObject<BootstrapperConfig>(json);
+                logger.Fatal("Error to open a private queue. The field \"queue\" is null.");
+                return;
             }
-            catch (MessageQueueException mqex)
+
+            // Iterate over all topics
+            foreach (Topic topic in topics)
             {
-                logger.Fatal(mqex, mqex.Message);
+                string serializedTopic = Utils.Compress(JsonConvert.SerializeObject(topic));
+                queue.Send(serializedTopic);
             }
+
+            queue.Dispose();
         }
 
         private static void SendMessage(string queuename, List<Section> sections)
@@ -132,7 +165,7 @@ namespace SectionsParser
             MSMQUtils MSMQ = new MSMQUtils();
 
             // Trying to open the queue
-            MessageQueue queue = MSMQ.OpenOrCreatePrivateQueue(queuename, typeof(Program).Namespace);
+            MessageQueue queue = MSMQ.OpenOrCreatePrivateQueue(queuename, typeof(SectionsParser).Namespace);
 
             // Sanit check
             if (queue == null)
@@ -151,22 +184,31 @@ namespace SectionsParser
             queue.Dispose();
         }
 
-        private static void ParseSections(ref Section section, WebRequests client)
+        private static void ParseSections(ref Section section, ref List<Topic> topics, WebRequests client)
         {
             int numberOfPage = 1;
 
-            string url = String.Empty;
+            string url             = String.Empty;
+            string sectionPieceUrl = String.Empty;
 
+            // Insert Source
+            section.Source = Source;
+
+            // Find the right URL
             Regex locationRegex = new Regex(@"\/(\d{1,4}.*)\?", RegexOptions.Compiled | RegexOptions.IgnoreCase);
             Match match = locationRegex.Match(section.Url);
             if (match.Success)
             {
-                string sectionPieceUrl = match.Groups[1].Value.Trim();
-                url = String.Format(_mapURLs["SectionTopics"], section.Url.Substring(section.Url.LastIndexOf("/") + 1, section.Url.IndexOf("?")), numberOfPage);
+                sectionPieceUrl = match.Groups[1].Value.Trim();
+                url = String.Format(_mapURLs["SectionTopics"], sectionPieceUrl, numberOfPage);
             }
+
+            section.Topics = new List<Topic>();
 
             while (!String.IsNullOrWhiteSpace(url))
             {
+                logger.Trace("Section {0} ... Page: {1}", section.Title, numberOfPage);
+
                 // Get Request
                 string htmlResponse = SharedLibrary.Utils.WebRequestsUtils.Get(ref client, logger, url);
 
@@ -188,12 +230,12 @@ namespace SectionsParser
                 HtmlNodeCollection topicsNode = htmlDoc.DocumentNode.SelectNodes(".//li[contains(@class,'threadbit')]");
                 if (topicsNode != null && topicsNode.Count > 0)
                 {
-                    List<Topic> topics = ParseTopicsInitInfo(topicsNode, section, numberOfPage);
+                    ParseTopicsInitInfo(topicsNode, ref section, numberOfPage, ref topics);
 
-                    if (topics != null)
+                    if (topics.Count % 10 == 0)
                     {
-                        section.Topics = topics;
-                        //TODO salvar os dados iniciais dos tópicos em uma fila
+                        SendMessage(TopicsRawDataQueueName, topics);
+                        topics.Clear();
                     }
                 }
                 else
@@ -202,40 +244,62 @@ namespace SectionsParser
                     numberOfPage += 1;
                     continue;
                 }
+
+
+                if (topics.Count > 0)
+                {
+                    SendMessage(TopicsRawDataQueueName, topics);
+                    topics.Clear();
+                }
+
+                // Next Page
+                numberOfPage += 1;
+                url = String.Format(_mapURLs["SectionTopics"], sectionPieceUrl, numberOfPage);
             }
         }
 
-        private static List<Topic> ParseTopicsInitInfo(HtmlNodeCollection topicsNode, Section section, int numberOfPage)
+        private static void ParseTopicsInitInfo(HtmlNodeCollection topicsNode, ref Section section, int numberOfPage, ref List<Topic> topics)
         {
-            List<Topic> topics = new List<Topic>();
 
             // Iterate over all Topics
             foreach (HtmlNode topicNode in topicsNode)
             {
                 Topic topic = new Topic();
-                topic.CaptureDateTime       = DateTime.UtcNow;
+                topic.Source                = Source;
+                topic.FirstCaptureDateTime  = DateTime.UtcNow;
                 topic.SectionTitle          = section.Title;
                 topic.NumberOfSectionPage   = numberOfPage;
+
 
                 // Extract Title
                 HtmlNode titleNode = topicNode.SelectSingleNode(".//a[@class='title']");
                 if (titleNode != null && !String.IsNullOrWhiteSpace(titleNode.InnerText.Trim()))
-                    topic.Title = titleNode.InnerText.Trim();
+                    topic.Title = Utils.Normalize(titleNode.InnerText.Trim());
+
+                if (topic.Title != null)
+                    logger.Trace("Section {0} ... Page: {1} ... Topic: {2}", section.Title, numberOfPage, topic.Title);
+                
 
                 // Extract href
                 if (titleNode.Attributes["href"] != null)
                     topic.Url = titleNode.Attributes["href"].Value.Trim();
 
+
                 // Complete Href
                 if (!topic.Url.StartsWith("http"))
                     topic.Url = Utils.AbsoluteUri(Config.Host, topic.Url);
 
+
                 // Extract Status
                 HtmlNode statusNode = topicNode.SelectSingleNode(".//span[@class='prefix understate']");
                 if (statusNode != null && statusNode.InnerText.IndexOf("Fixo", StringComparison.OrdinalIgnoreCase) > -1)
-                    topic.StatusId = Enums.Status.Fixed;
-                else
-                    topic.StatusId = Enums.Status.Normal;
+                    continue;
+                    else if (statusNode != null && statusNode.InnerText.IndexOf("Movido", StringComparison.OrdinalIgnoreCase) > -1)
+                        topic.StatusId = Enums.Status.Moved;
+                        else
+                            topic.StatusId = Enums.Status.Normal;
+
+
 
                 // Extract Author and PublishDate
                 HtmlNode authorNode = topicNode.SelectSingleNode(".//a[contains(@class,'username')]");
@@ -244,7 +308,7 @@ namespace SectionsParser
                     topic.Author = authorNode.InnerText.Trim();
                     if (authorNode.Attributes["title"].Value.Contains("em"))
                     {
-                        string publishDate = authorNode.Attributes["title"].Value.Split(new[] { "em" }, StringSplitOptions.RemoveEmptyEntries)[1];
+                        string publishDate = authorNode.Attributes["title"].Value.Split(new[] { " em " }, StringSplitOptions.RemoveEmptyEntries)[1];
 
                         DateTime dateTime = FormatDateTime(publishDate.Trim());
                         if (dateTime != DateTime.MinValue)
@@ -258,24 +322,26 @@ namespace SectionsParser
                 HtmlNode evaluationNode = topicNode.SelectSingleNode(".//ul[contains(@class,'threadstats')]/li[@class='hidden']");
                 if (evaluationNode != null && !String.IsNullOrWhiteSpace(evaluationNode.InnerText))
                 {
-                    // InnerText -> 
                     double evaluation = GetEvaluation(evaluationNode.InnerText);
-                    if (evaluation >= 0)
+                    if (evaluation > 0)
                         topic.Evaluation = evaluation;
                 }
 
 
-            }
+                // Insert into topics list
+                topics.Add(topic);
 
-            return null;
+                // Insert into Section
+                section.Topics.Add(topic);
+            }
         }
 
         private static void InitializeAppConfig()
         {
             SectionsQueuerQueueName = Utils.LoadConfigurationSetting("SectionsQueuerQueue", "");
             SectionsParserQueueName = Utils.LoadConfigurationSetting("SectionsParserQueue", "");
+            TopicsRawDataQueueName  = Utils.LoadConfigurationSetting("TopicsQueuerQueue",   "");
             ConfigurationQueueName  = Utils.LoadConfigurationSetting("ConfigurationQueue", "ForumTibiaBR_Config");
-
         }
 
         private static Section ReadQueue(string queuename)
@@ -336,11 +402,16 @@ namespace SectionsParser
         /// <summary>
         /// Date Example:
         ///  19-09-2004 17:01
+        ///  Hoje 11:32
+        ///  Ontem 11:58
         /// </summary>
         private static DateTime FormatDateTime(string publishDate)
         {
             string date     = String.Empty;
             string time     = String.Empty;
+            string year     = String.Empty;
+            string month    = String.Empty;
+            string day      = String.Empty;
             string hour     = String.Empty;
             string minute   = String.Empty;
 
@@ -353,6 +424,8 @@ namespace SectionsParser
                 date = publishDate.Split(separator, StringSplitOptions.None)[0].Trim();
                 time = publishDate.Split(separator, StringSplitOptions.None)[1].Trim();
 
+
+                // Time
                 if (time.Contains(":"))
                 {
                     hour    = time.Split(':')[0].Trim();
@@ -364,7 +437,27 @@ namespace SectionsParser
                     minute  = time.Split('H')[1].Trim();
                 }
 
-                formatedDateTime = new DateTime(Int32.Parse(date.Split('-')[2].Trim()), Int32.Parse(date.Split('-')[1].Trim()), Int32.Parse(date.Split('-')[0].Trim()), Int32.Parse(hour), Int32.Parse(minute), 0);
+                // Date
+                if (date.ToLower().Contains("hoje"))
+                {
+                    year    = Convert.ToString(DateTime.UtcNow.Year);
+                    month   = Convert.ToString(DateTime.UtcNow.Month);
+                    day     = Convert.ToString(DateTime.UtcNow.Day);
+
+                    formatedDateTime = new DateTime(Int32.Parse(year), Int32.Parse(month), Int32.Parse(day), Int32.Parse(hour), Int32.Parse(minute), 0);
+                }
+                else if (date.ToLower().Contains("ontem"))
+                {
+                    year    = Convert.ToString(DateTime.UtcNow.Year);
+                    month   = Convert.ToString(DateTime.UtcNow.Month);
+                    day     = Convert.ToString(DateTime.UtcNow.Day-1);
+
+                    formatedDateTime = new DateTime(Int32.Parse(year), Int32.Parse(month), Int32.Parse(day), Int32.Parse(hour), Int32.Parse(minute), 0);
+                }
+                else
+                    formatedDateTime = new DateTime(Int32.Parse(date.Split('-')[2].Trim()), Int32.Parse(date.Split('-')[1].Trim()), Int32.Parse(date.Split('-')[0].Trim()), Int32.Parse(hour), Int32.Parse(minute), 0);
+
+                
                 formatedDateTime = TimeZoneInfo.ConvertTimeToUtc(formatedDateTime);
             }
             catch

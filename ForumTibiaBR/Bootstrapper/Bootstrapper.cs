@@ -14,11 +14,11 @@ using WebUtilsLib;
 
 namespace Bootstrapper
 {
-    public class Program
+    public class Bootstrapper
     {
-        private static string ConfigFilePath;
-        private static Logger logger = null;
-        private static BootstrapperConfig Config;
+        private static string               ConfigFilePath;
+        private static BootstrapperConfig   Config;
+        private static Logger               logger = null;
 
         public static void Main(string[] args)
         {
@@ -58,7 +58,7 @@ namespace Bootstrapper
             MSMQUtils MSMQ = new MSMQUtils();
 
             // Trying to open the queue
-            MessageQueue queue = MSMQ.OpenOrCreatePrivateQueue(Config.WebRequestConfigQueue, typeof(Program).Namespace);
+            MessageQueue queue = MSMQ.OpenOrCreatePrivateQueue(Config.WebRequestConfigQueue, typeof(Bootstrapper).Namespace);
 
             // Sanit check
             if (queue == null)
@@ -67,6 +67,9 @@ namespace Bootstrapper
                 return;
             }
 
+            // Is there content in the queue? Let's remove it
+            MSMQ.DeleteContentPrivateQueue(Config.WebRequestConfigQueue);
+            
             string serializedConfig = Utils.Compress(JsonConvert.SerializeObject(Config));
             queue.Send(serializedConfig);
         }
@@ -75,6 +78,7 @@ namespace Bootstrapper
         {
             logger.Info("Start");
 
+            MSMQUtils MSMQ = new MSMQUtils();
 
             // Initialization WebRequests
             WebRequests client = new WebRequests();
@@ -97,7 +101,6 @@ namespace Bootstrapper
             map.LoadHtml(htmlResponse);
 
 
-
             //Scrape Urls
             logger.Trace("Scraping section urls");
             List<Section> sections = ScrapeSections(map);
@@ -108,8 +111,8 @@ namespace Bootstrapper
                 Environment.Exit(-103);
             }
 
-
             // Send messages to Queue
+            logger.Trace("Send message to configuration queue");
             SendMessage(Config.TargetQueue, sections);
 
             logger.Info("End");
@@ -120,7 +123,7 @@ namespace Bootstrapper
             MSMQUtils MSMQ = new MSMQUtils();
 
             // Trying to open the queue
-            MessageQueue queue = MSMQ.OpenOrCreatePrivateQueue(queuename, typeof(Program).Namespace);
+            MessageQueue queue = MSMQ.OpenOrCreatePrivateQueue(queuename, typeof(Bootstrapper).Namespace);
 
             // Sanit check
             if (queue == null)

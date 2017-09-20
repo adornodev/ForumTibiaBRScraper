@@ -1,9 +1,8 @@
-﻿using System;
+﻿using Newtonsoft.Json;
+using SharedLibrary.Models;
+using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Messaging;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace SharedLibrary.Utils
 {
@@ -99,6 +98,46 @@ namespace SharedLibrary.Utils
                 return true;
             }
             return false;
+        }
+
+        public bool SendMessage(string queuename, string Namespace, List<Object> objects)
+        {
+            MSMQUtils MSMQ = new MSMQUtils();
+
+            // Trying to open the queue
+            MessageQueue queue = MSMQ.OpenOrCreatePrivateQueue(queuename, Namespace);
+
+            // Sanit check
+            if (queue == null)
+                return false;
+
+            try
+            {
+                // Iterate over all objects
+                foreach (Object obj in objects)
+                {
+                    string serializedObj = Utils.Compress(JsonConvert.SerializeObject(obj));
+                    queue.Send(serializedObj);
+                }
+            }
+            catch (Exception ex) { return false; }
+
+            queue.Dispose();
+
+            return true;
+        }
+
+        public static BootstrapperConfig GetContentConfigurationQueue(string configurationQueueName)
+        {
+            MSMQUtils MSMQ = new MSMQUtils();
+
+            object obj  = MSMQ.ReadPrivateQueue(configurationQueueName, persist: true);
+            string json = Utils.Decompress((string)obj);
+
+            // Deserialize
+            BootstrapperConfig config = JsonConvert.DeserializeObject<BootstrapperConfig>(json);
+
+            return config;
         }
     }
 }

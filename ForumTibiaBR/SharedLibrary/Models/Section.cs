@@ -6,6 +6,8 @@ namespace SharedLibrary.Models
 {
     public class Section
     {
+        [Required]
+        public string Source        { get; set; }
         [Required(ErrorMessageResourceType = typeof(Languages.Language),ErrorMessageResourceName = "SECTION_ERROR_VALIDATION_Title")]
         public string Title         { get; set; }
 

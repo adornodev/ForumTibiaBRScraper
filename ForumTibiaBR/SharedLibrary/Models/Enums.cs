@@ -11,6 +11,7 @@ namespace SharedLibrary.Models
         public enum Status
         {
             Normal,
+            Moved,
             Fixed
         };
     }

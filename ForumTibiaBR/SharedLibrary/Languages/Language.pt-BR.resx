@@ -126,4 +126,7 @@
   <data name="TOPIC_ERROR_VALIDATION_NumberOfSectionPage" xml:space="preserve">
     <value>O campo {0} tem que ter valor maior que 1.</value>
   </data>
+  <data name="USER_ERROR_VALIDATION_NumberOfComments" xml:space="preserve">
+    <value>O campo {0} tem que possuir um valor superior ou igual a 0.</value>
+  </data>
 </root>

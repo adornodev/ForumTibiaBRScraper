@@ -86,5 +86,14 @@ namespace SharedLibrary.Languages {
                 return ResourceManager.GetString("TOPIC_ERROR_VALIDATION_NumberOfSectionPage", resourceCulture);
             }
         }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The field {0} must have value more or equal than 0..
+        /// </summary>
+        public static string USER_ERROR_VALIDATION_NumberOfComments {
+            get {
+                return ResourceManager.GetString("USER_ERROR_VALIDATION_NumberOfComments", resourceCulture);
+            }
+        }
     }
 }

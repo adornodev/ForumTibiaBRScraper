@@ -203,8 +203,6 @@ namespace SectionsParser
                 url = String.Format(_mapURLs["SectionTopics"], sectionPieceUrl, numberOfPage);
             }
 
-            section.Topics = new List<Topic>();
-
             while (!String.IsNullOrWhiteSpace(url))
             {
                 logger.Trace("Section {0} ... Page: {1}", section.Title, numberOfPage);
@@ -330,9 +328,6 @@ namespace SectionsParser
 
                 // Insert into topics list
                 topics.Add(topic);
-
-                // Insert into Section
-                section.Topics.Add(topic);
             }
         }
 

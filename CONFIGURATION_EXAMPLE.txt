@@ -1,0 +1,26 @@
+// You need to choose whether to use the Mongo fields or if you will only use the native Windows Queues ("TargetQueue" field)
+{
+	"ProcessName": "",
+	"InitialUrl": "",
+	"SectionXPath": "",
+	"SectionsList": "",
+	"Host": "",
+	"KeepAlive": true,
+	"Accept": "",
+	"UserAgent": "",
+	"ContentType": "",
+	"Charset": "",
+	"Timeout" : 30000,
+	"AcceptEncoding": "",
+	"AcceptLanguage": "",
+	"WebRequestConfigQueue": "",
+	
+	
+	"TargetQueue": "",
+	
+	"MongoUser":"",
+    "MongoPassword":"",
+    "MongoAddress":"",
+    "MongoDatabase":"",
+    "MongoCollection":""
+}

@@ -33,10 +33,15 @@ namespace SharedLibrary.Models
         [Required]
         public string AcceptLanguage        { get; set; }
         [Required]
-        public string TargetQueue           { get; set; }
-        [Required]
         public string WebRequestConfigQueue { get; set; }
 
+        public string TargetQueue           { get; set; }
+
+        public string MongoUser             { get; set; }
+        public string MongoPassword         { get; set; }
+        public string MongoAddress          { get; set; }
+        public string MongoDatabase         { get; set; }
+        public string MongoCollection       { get; set; }
 
         public bool VerifyMandatoryFields(BootstrapperConfig Config)
         {
@@ -51,7 +56,6 @@ namespace SharedLibrary.Models
             sucess = sucess && !String.IsNullOrWhiteSpace(Charset);
             sucess = sucess && !String.IsNullOrWhiteSpace(AcceptEncoding);
             sucess = sucess && !String.IsNullOrWhiteSpace(AcceptLanguage);
-            sucess = sucess && !String.IsNullOrWhiteSpace(TargetQueue);
             sucess = sucess && !String.IsNullOrWhiteSpace(WebRequestConfigQueue);
 
             return sucess;

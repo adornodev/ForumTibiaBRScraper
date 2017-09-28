@@ -2,7 +2,7 @@
 	"ProcessName": "TibiaBR",
 	"InitialUrl": "https://forums.tibiabr.com",
 	"SectionXPath": ".//div[@class='forumrow table']",
-	"SectionsList": "Tibia Geral",
+	"SectionsList": "",
 	"Host": "forums.tibiabr.com",
 	"KeepAlive": true,
 	"Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8",
@@ -12,6 +12,10 @@
 	"Timeout" : 30000,
 	"AcceptEncoding": "Accept-Encoding: gzip, deflate, br",
 	"AcceptLanguage": "Accept-Language: pt-BR,pt;q=0.8,en-US;q=0.6,en;q=0.4",
-	"TargetQueue": "ForumTibiaBR_SectionsRawData",
-	"WebRequestConfigQueue": "ForumTibiaBR_Config"
+	"WebRequestConfigQueue": "ForumTibiaBR_Config",
+	"MongoUser":"sysdba",
+    "MongoPassword":"tibiabr",
+    "MongoAddress":"localhost:27017",
+    "MongoDatabase":"RookDB",
+    "MongoCollection":"Sections"
 }

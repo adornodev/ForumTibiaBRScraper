@@ -1,4 +1,6 @@
 ﻿using HtmlAgilityPack;
+using MongoDB.Bson;
+using MongoDB.Driver;
 using Newtonsoft.Json;
 using NLog;
 using SharedLibrary.Models;
@@ -8,8 +10,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Messaging;
-using System.Text;
-using System.Threading.Tasks;
 using WebUtilsLib;
 
 namespace Bootstrapper
@@ -19,6 +19,7 @@ namespace Bootstrapper
         private static string               ConfigFilePath;
         private static BootstrapperConfig   Config;
         private static Logger               logger = null;
+        private static string               Source = "TibiaBR";
 
         public static void Main(string[] args)
         {
@@ -93,6 +94,7 @@ namespace Bootstrapper
                 logger.Fatal("HtmlResponse is null or empty");
                 Environment.Exit(-101);
             }
+  
 
             client.Dispose();
 
@@ -111,11 +113,47 @@ namespace Bootstrapper
                 Environment.Exit(-103);
             }
 
-            // Send messages to Queue
-            logger.Trace("Send message to configuration queue");
-            SendMessage(Config.TargetQueue, sections);
+            // Let's save the information
+            if (!String.IsNullOrWhiteSpace(Config.TargetQueue) && String.IsNullOrWhiteSpace(Config.MongoAddress))
+            {
+                // Send messages to Queue
+                logger.Trace("Sending message to configuration queue...");
+                SendMessage(Config.TargetQueue, sections);
+            }
+            else
+            {
+                // Send messages to collection
+                logger.Trace("Sending message to MongoCollection...");
+                SendMessage(sections);
+            }
 
             logger.Info("End");
+        }
+
+        private static void SendMessage(List<Section> sections)
+        {
+            string connectionString = String.Format("mongodb://{0}:{1}@{2}",Config.MongoUser,Config.MongoPassword,Config.MongoAddress);
+
+            IMongoClient    client      = new MongoClient(connectionString);
+            IMongoDatabase  database    = client.GetDatabase(Config.MongoDatabase);
+
+            IMongoCollection<Section> collection = database.GetCollection<Section>(Config.MongoCollection);
+
+            // Iterate over all sections
+            foreach (Section section in sections)
+            {
+                //FindAll -> collection.AsQueryable<Section>().ToList();
+
+                // Before inserting, we need to check if lot was already inserted and update it if this is the case
+                UpdateResult result = collection.UpdateOne(Builders<Section>.Filter.Eq("Url", section.Url),
+                                                            Builders<Section>.Update
+                                                            .Set("NumberOfTopics", section.NumberOfTopics)
+                                                            .Set("NumberOfViews", section.NumberOfViews));
+                // New Register
+                if (result.MatchedCount == 0)
+                    collection.InsertOne(section);
+               
+            }
         }
 
         private static void SendMessage(string queuename, List<Section> sections)
@@ -184,7 +222,7 @@ namespace Bootstrapper
             int numberOfTopics  = 0;
 
             // Is there a section filter?
-            string[] relevantSections = null;
+            string[] relevantSections = new string[] { };
 
             if (Config.SectionsList.Contains(","))
                 relevantSections = Config.SectionsList.Split(new[] { "," }, StringSplitOptions.RemoveEmptyEntries);
@@ -194,8 +232,7 @@ namespace Bootstrapper
             // Check relevantSections
             if (relevantSections == null)
             {
-                logger.Warn("Relevat Sections could not be found");
-                return null;
+                logger.Debug("Relevat Sections could not be found");
             }
 
 
@@ -238,9 +275,7 @@ namespace Bootstrapper
 
             // Complete URL
             if (!url.StartsWith("http"))
-            {
                 url = Utils.AbsoluteUri(Config.Host, url);
-            }
 
 
             // Is it normal section? (some topics, comments etc)
@@ -266,12 +301,12 @@ namespace Bootstrapper
 
 
             Section section = new Section();
+            section.Source          = Source;
             section.Url             = url;
             section.Title           = title;
             section.Description     = description;
             section.NumberOfTopics  = numberOfTopics;
             section.NumberOfViews   = numberOfViews;
-
 
             return section;
         }
@@ -302,5 +337,6 @@ namespace Bootstrapper
 
             return true;
         }
+
     }
 }

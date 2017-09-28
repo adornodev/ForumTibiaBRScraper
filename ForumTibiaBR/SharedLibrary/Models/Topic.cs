@@ -33,14 +33,18 @@ namespace SharedLibrary.Models
         public double       Evaluation                  { get; set; }
         public string       LastPostUsername            { get; set; }
         public DateTime     LastPostPublishDate         { get; set; }
+
         public string       Status                      { get; private set; }
         public Enums.Status StatusId                    { get { return _Status; } set { _Status = value; Status = EnumHelper.StatusToString(value); } }
-        private Enums.Status _Status;                                // Private attribute to convert Enum to String
+        private Enums.Status _Status;                   // Private attribute to convert Enum to String
+
         [Required]
         public string       SectionTitle                { get; set; }
+
         [Required(ErrorMessageResourceType = typeof(Languages.Language), ErrorMessageResourceName = "TOPIC_ERROR_VALIDATION_NumberOfSectionPage")]
         [Range(1, int.MaxValue)]
         public int          NumberOfSectionPage         { get; set; }
+
         public DateTime     FirstCaptureDateTime        { get; set; }
         public int          Version                     { get; set; } // amount of times this auction was captured
     }

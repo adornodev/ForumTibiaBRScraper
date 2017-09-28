@@ -27,7 +27,7 @@ namespace SharedLibrary.Utils
         private const int MaxPageSize = 5 * (1024 * 1024);
 
 
-        public static void InitializeWebRequest (string url, out WebRequests webreq, BootstrapperConfig Config)
+        public static void InitializeWebRequest (string url, out WebRequests webreq, InputConfig Config)
         {
             // Create new
             webreq = new WebRequests();

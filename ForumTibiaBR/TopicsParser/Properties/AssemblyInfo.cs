@@ -5,11 +5,11 @@ using System.Runtime.InteropServices;
 // General Information about an assembly is controlled through the following 
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
-[assembly: AssemblyTitle("Bootstrapper")]
+[assembly: AssemblyTitle("TopicsParser")]
 [assembly: AssemblyDescription("")]
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("")]
-[assembly: AssemblyProduct("Bootstrapper")]
+[assembly: AssemblyProduct("TopicsParser")]
 [assembly: AssemblyCopyright("Copyright ©  2017")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
@@ -20,7 +20,7 @@ using System.Runtime.InteropServices;
 [assembly: ComVisible(false)]
 
 // The following GUID is for the ID of the typelib if this project is exposed to COM
-[assembly: Guid("cfcb9df0-486c-4369-9b97-73b6bfbfec45")]
+[assembly: Guid("40d2b234-84e4-418c-a225-3a44afcca4f7")]
 
 // Version information for an assembly consists of the following four values:
 //

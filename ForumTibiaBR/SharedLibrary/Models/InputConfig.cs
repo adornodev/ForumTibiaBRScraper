@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 
 namespace SharedLibrary.Models
 {
-    public class BootstrapperConfig
+    public class InputConfig
     {
         [Required]
         public string ProcessName           { get; set; }
@@ -43,7 +43,7 @@ namespace SharedLibrary.Models
         public string MongoDatabase         { get; set; }
         public string MongoCollection       { get; set; }
 
-        public bool VerifyMandatoryFields(BootstrapperConfig Config)
+        public bool VerifyMandatoryFields(InputConfig Config)
         {
             bool sucess = true;
 

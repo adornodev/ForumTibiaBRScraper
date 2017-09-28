@@ -22,18 +22,14 @@ Features
 Structure
 ---
  
-### Bootstrapper
-
-This is the first step that should be executed.
-It is responsible for reading the configuration file and fetching the URLs for each requested section. When running this search, the process also captures information about the Section (Example: Number of Topics, Views).
-
 ### SectionsParser
 
-This step processes the information captured above. Furthermore, it also captures more information about the Section and some initial details associated to the topics in this section.
+This is the first step that should be executed.
+It is responsible for reading the configuration file and fetching the URLs for each requested section. When running this search, the process also captures all information about the Section.
 
 ### TopicsParser
 
-This step captures all information related to the Topic class. It also captures some initial information about the comments.
+This step captures all information related to the Topic class. 
 
 ### CommentsParser
 

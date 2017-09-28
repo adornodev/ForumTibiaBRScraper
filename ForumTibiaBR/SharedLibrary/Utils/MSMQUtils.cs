@@ -127,7 +127,7 @@ namespace SharedLibrary.Utils
             return true;
         }
 
-        public static BootstrapperConfig GetContentConfigurationQueue(string configurationQueueName)
+        public static InputConfig GetContentConfigurationQueue(string configurationQueueName)
         {
             MSMQUtils MSMQ = new MSMQUtils();
 
@@ -135,7 +135,7 @@ namespace SharedLibrary.Utils
             string json = Utils.Decompress((string)obj);
 
             // Deserialize
-            BootstrapperConfig config = JsonConvert.DeserializeObject<BootstrapperConfig>(json);
+            InputConfig config = JsonConvert.DeserializeObject<InputConfig>(json);
 
             return config;
         }

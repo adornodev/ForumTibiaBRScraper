@@ -78,7 +78,7 @@
       <DesignTime>True</DesignTime>
       <DependentUpon>Language.pt-BR.resx</DependentUpon>
     </Compile>
-    <Compile Include="Models\BootstrapperConfig.cs" />
+    <Compile Include="Models\InputConfig.cs" />
     <Compile Include="Models\Comment.cs" />
     <Compile Include="Models\Enums.cs" />
     <Compile Include="Models\User.cs" />

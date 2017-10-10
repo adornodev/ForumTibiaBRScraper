@@ -27,5 +27,12 @@ namespace SharedLibrary.Models
         public string   Location                { get; set; }
         public string   Signature               { get; set; }
         public int      Age                     { get; set; }
+        public int      Version                 { get; set; }
+
+        public User ()
+        {
+            this.NumberOfComments = -1;
+            this.Version          = 0;
+        }
     }
 }

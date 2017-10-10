@@ -27,6 +27,11 @@ namespace SharedLibrary.Models
         public string       Text                    { get; set; }
         public int          Version                 { get; set; } // amount of times this auction was captured
 
-
+        public Comment ()
+        {
+            this.FirstCaptureDateTime = DateTime.UtcNow;
+            this.LastCaptureDateTime  = DateTime.UtcNow;
+            this.Version              = 0;
+        }
     }
 }

@@ -21,11 +21,20 @@ namespace SharedLibrary.Models
 
         [Required(ErrorMessageResourceType = typeof(Languages.Language), ErrorMessageResourceName = "SECTION_ERROR_VALIDATION_Url")]
         [Url]
-        public string Url           { get; set; }
+        public string FullUrl       { get; set; }
 
-        
+        [Required(ErrorMessageResourceType = typeof(Languages.Language), ErrorMessageResourceName = "SECTION_ERROR_VALIDATION_Url")]
+        [Url]
+        public string MainUrl       { get; set; }
+
         public int NumberOfTopics   { get; set; }
 
         public int NumberOfViews    { get; set; }
+
+        public Section ()
+        {
+            this.NumberOfTopics = -1;
+            this.NumberOfViews  = -1;
+        }
     }
 }

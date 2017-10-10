@@ -1,5 +1,7 @@
 ﻿using HtmlAgilityPack;
 using Newtonsoft.Json;
+using MongoDB.Driver;
+using MongoDB.Bson;
 using NLog;
 using SharedLibrary.Models;
 using SharedLibrary.Utils;
@@ -18,14 +20,16 @@ namespace TopicsParser
     {
         #region Private Attributes
 
-        private static string Source = "TibiaBR";
+        private static string                   Source = "TibiaBR";
+        private static string                   SectionsQueueName;
+        private static string                   TopicsQueueName;
+        private static string                   ConfigurationQueueName;
+        private static string                   TopicsCollection;
+        private static InputConfig              Config;
+        private static Logger                   logger = null;
+        private static MongoDBUtils<Section>    MongoUtilsSectionObj;
+        private static MongoDBUtils<Topic>      MongoUtilsTopicObj;
 
-        private static Logger logger = null;
-        private static string SectionsQueueName;
-        private static string TopicsQueueName;
-        private static string ConfigurationQueueName;
-        private static InputConfig Config;
-        
         private static Dictionary<string, string> _mapURLs = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
             // {0} - Section.Url until find "?",  {1} - Number of Page
@@ -64,6 +68,13 @@ namespace TopicsParser
             }
 
 
+            // Initialization Mongo
+            if (!InitializeMongo())
+            {
+                logger.Fatal("Error parsing Mongo variables! Aborting...");
+                Environment.Exit(-101);
+            }
+
             try
             {
                 // Main
@@ -90,35 +101,69 @@ namespace TopicsParser
             InitializeWebRequest(ref client);
 
             // Lists that will be filled with compressed serialized object
-            List<Section> sections = new List<Section>();
             List<Topic>   topics   = new List<Topic>();
 
-            Section section;
-            while ( (section = ReadQueue(SectionsQueueName)) != null)
+
+            MongoUtilsSectionObj.GetCollection(Config.MongoCollection);
+
+            List<Section> sections = MongoUtilsSectionObj.collection.AsQueryable<Section>().ToList();
+
+
+            // Iterate over all Sections
+            foreach(Section sec in sections)
             {
-                if (section == null)
-                    break;
+                logger.Trace("Processing \"{0}\" section ...", sec.Title);
 
-                logger.Trace("Processing \"{0}\" section ...", section.Title);
-
-                // Parse Sections
-                ParseSections(ref section, ref topics, client);
-
-                // Insert into sections list
-                sections.Add(section);
-
-                if (sections.Count % 5 == 0)
-                {
-                    //SendMessage();
-                    sections.Clear();
-                }
+                // Parse Topic
+                DoWork(sec, ref topics, client);
             }
+
+            //Section section;
+            //while ( (section = ReadQueue(SectionsQueueName)) != null)
+            //{
+            //    if (section == null)
+            //        break;
+
+            //    logger.Trace("Processing \"{0}\" section ...", section.Title);
+
+            //    // Parse Sections
+            //    ParseTopic(section, ref topics, client);
+
+            //    // Insert into sections list
+            //    sections.Add(section);
+
+            //    if (sections.Count % 5 == 0)
+            //    {
+            //        //SendMessage();
+            //        sections.Clear();
+            //    }
+            //}
             
             // Has more?
-            if (sections.Count != 0)
+            if (topics.Count != 0)
             {
                 //SendMessage();
             }
+        }
+
+        private static bool InitializeMongo()
+        {
+            MongoUtilsSectionObj = new MongoDBUtils<Section>(Config.MongoUser, Config.MongoPassword, Config.MongoAddress, Config.MongoDatabase);
+            MongoUtilsTopicObj   = new MongoDBUtils<Topic>(Config.MongoUser, Config.MongoPassword, Config.MongoAddress, Config.MongoDatabase);
+
+            // Sanit Check
+            if (!MongoUtilsSectionObj.IsValidMongoData(Config))
+                return false;
+
+            // Invalid Collection?
+            if (!MongoUtilsSectionObj.CollectionExistsAsync(Config.MongoCollection).Result || !MongoUtilsTopicObj.CollectionExistsAsync(TopicsCollection).Result)
+                return false;
+
+            // Open the Connection
+            MongoUtilsSectionObj.GetCollection(Config.MongoCollection);
+            MongoUtilsTopicObj.GetCollection(TopicsCollection);
+
+            return true;
         }
 
         private static void InitializeWebRequest(ref WebRequests client)
@@ -159,43 +204,17 @@ namespace TopicsParser
             queue.Dispose();
         }
 
-        private static void SendMessage(string queuename, List<Section> sections)
-        {
-            MSMQUtils MSMQ = new MSMQUtils();
-
-            // Trying to open the queue
-            MessageQueue queue = MSMQ.OpenOrCreatePrivateQueue(queuename, typeof(TopicsParser).Namespace);
-
-            // Sanit check
-            if (queue == null)
-            {
-                logger.Fatal("Error to open a private queue. The field \"queue\" is null.");
-                return;
-            }
-
-            // Iterate over all sections
-            foreach (Section section in sections)
-            {
-                string serializedSection = Utils.Compress(JsonConvert.SerializeObject(section));
-                queue.Send(serializedSection);
-            }
-
-            queue.Dispose();
-        }
-
-        private static void ParseSections(ref Section section, ref List<Topic> topics, WebRequests client)
+        private static void DoWork(Section section, ref List<Topic> topics, WebRequests client)
         {
             int numberOfPage = 1;
 
             string url             = String.Empty;
             string sectionPieceUrl = String.Empty;
-
-            // Insert Source
-            section.Source = Source;
-
+   
+            
             // Find the right URL
             Regex locationRegex = new Regex(@"\/(\d{1,4}.*)\?", RegexOptions.Compiled | RegexOptions.IgnoreCase);
-            Match match = locationRegex.Match(section.Url);
+            Match match = locationRegex.Match(section.FullUrl);
             if (match.Success)
             {
                 sectionPieceUrl = match.Groups[1].Value.Trim();
@@ -209,7 +228,6 @@ namespace TopicsParser
                 // Get Request
                 string htmlResponse = SharedLibrary.Utils.WebRequestsUtils.Get(ref client, logger, url);
 
-                //TODO Preciso checar se estou na útlima página... Página XXX de XXX . Se sim, sair do loop
 
                 // Checking if html response is valid
                 if (String.IsNullOrWhiteSpace(htmlResponse))
@@ -219,19 +237,22 @@ namespace TopicsParser
                     continue;
                 }
 
+
                 // Loading HtmlDocument
                 HtmlDocument htmlDoc = new HtmlDocument();
                 htmlDoc.LoadHtml(htmlResponse);
+
 
                 // Extract Topics
                 HtmlNodeCollection topicsNode = htmlDoc.DocumentNode.SelectNodes(".//li[contains(@class,'threadbit')]");
                 if (topicsNode != null && topicsNode.Count > 0)
                 {
-                    ParseTopicsInitInfo(topicsNode, ref section, numberOfPage, ref topics);
+                    ParseTopic(topicsNode, ref section, numberOfPage, ref topics);
 
-                    if (topics.Count % 10 == 0)
+                    if (topics.Count % 10 == 0 && topics.Count !=0)
                     {
-                        SendMessage(TopicsQueueName, topics);
+                        //SendMessage(TopicsQueueName, topics);
+                        SendMessage(topics);
                         topics.Clear();
                     }
                 }
@@ -245,8 +266,25 @@ namespace TopicsParser
 
                 if (topics.Count > 0)
                 {
-                    SendMessage(TopicsQueueName, topics);
+                    SendMessage(topics);
+                    //SendMessage(TopicsQueueName, topics);
                     topics.Clear();
+                }
+
+                // Is it the last Page?
+                HtmlNode statsPageNode = htmlDoc.DocumentNode.SelectSingleNode(".//div[@class='threadpagestats']");
+                if (statsPageNode != null)
+                {
+                    string stats = statsPageNode.InnerText.Trim();
+
+                    Regex statsRegex = new Regex(@"\s(\d{1,})\sa\s(\d{1,})", RegexOptions.Compiled);
+                    match = statsRegex.Match(stats);
+
+                    if (match.Success)
+                    {
+                        if (match.Groups.Count == 3 && match.Groups[1].Value.Trim().Equals(match.Groups[2].Value.Trim()))
+                            break;
+                    }
                 }
 
                 // Next Page
@@ -255,7 +293,29 @@ namespace TopicsParser
             }
         }
 
-        private static void ParseTopicsInitInfo(HtmlNodeCollection topicsNode, ref Section section, int numberOfPage, ref List<Topic> topics)
+        private static void SendMessage(List<Topic> topics)
+        {
+
+            // Iterate over all Topics
+            foreach (Topic topic in topics)
+            {
+                //// Before inserting, we need to check if lot was already inserted and update it if this is the case
+                //UpdateResult result = MongoUtilsTopicObj.collection.UpdateOne(Builders<Topic>.Filter.Eq(reg => reg.Url, topic.Url),
+                //                                                              Builders<Topic>.Update
+                //                                                                 .Set("NumberOfComments", topic.NumberOfComments)
+                //                                                                 .Set("FullUrl", topic.FullUrl)
+                //                                                                 .Set("NumberOfViews", topic.NumberOfViews));
+
+                ReplaceOneResult result2 = MongoUtilsTopicObj.collection.ReplaceOne(Builders<Topic>.Filter.Where(reg => reg.Url.Equals(topic.Url)), topic);
+                
+                // New Register
+                if (result2.MatchedCount == 0)
+                    MongoUtilsTopicObj.collection.InsertOne(topic);
+
+            }
+        }
+
+        private static void ParseTopic(HtmlNodeCollection topicsNode, ref Section section, int numberOfPage, ref List<Topic> topics)
         {
 
             // Iterate over all Topics
@@ -263,7 +323,6 @@ namespace TopicsParser
             {
                 Topic topic = new Topic();
                 topic.Source                = Source;
-                topic.FirstCaptureDateTime  = DateTime.UtcNow;
                 topic.SectionTitle          = section.Title;
                 topic.NumberOfSectionPage   = numberOfPage;
 
@@ -281,7 +340,6 @@ namespace TopicsParser
                 if (titleNode.Attributes["href"] != null)
                     topic.Url = titleNode.Attributes["href"].Value.Trim();
 
-
                 // Complete Href
                 if (!topic.Url.StartsWith("http"))
                     topic.Url = Utils.AbsoluteUri(Config.Host, topic.Url);
@@ -297,9 +355,54 @@ namespace TopicsParser
                             topic.StatusId = Enums.Status.Normal;
 
 
+                // Extract LastPostUsername and LastPostPublishDate
+                HtmlNode lastPostNode = topicNode.SelectSingleNode(".//dl[contains(@class,'threadlastpost')]");
+                if (lastPostNode != null)
+                {
+                    HtmlNode lastUserNode = lastPostNode.SelectSingleNode(".//a/strong");
+                    if (lastUserNode != null)
+                        topic.LastPostUsername = Utils.Normalize(lastUserNode.InnerText.Trim());
 
-                // Extract Author and PublishDate
-                HtmlNode authorNode = topicNode.SelectSingleNode(".//a[contains(@class,'username')]");
+                    HtmlNode lastPostPublishDateNode = lastPostNode.SelectSingleNode(".//dd[last()]");
+                    if (lastPostPublishDateNode != null)
+                    {
+                        string publishDate = Utils.Normalize(lastPostPublishDateNode.InnerText.Trim());
+
+                        DateTime dateTime = FormatDateTime(publishDate.Trim());
+                        if (dateTime != DateTime.MinValue)
+                        {
+                            topic.LastPostPublishDate = dateTime;
+                        }
+                    }
+                }
+
+                // Extract NumberOfViews and NumberOfComments
+                HtmlNode numbersNode = topicNode.SelectSingleNode(".//ul[contains(@class,'threadstats')]");
+                if (numbersNode != null)
+                {
+                    HtmlNode viewsNode = numbersNode.SelectSingleNode("./li[position()=1]");
+
+                    int number = -1;
+                    if (viewsNode != null)
+                    {
+                        Int32.TryParse(String.Join("", Utils.Normalize(viewsNode.InnerText).Where(c => Char.IsDigit(c))), out number);
+                        if (number >= 0)
+                            topic.NumberOfViews = number;
+                    }
+
+                    number = -1;
+
+                    HtmlNode commentsNode = numbersNode.SelectSingleNode(".//dd[last()]");
+                    if (commentsNode != null)
+                    {
+                        Int32.TryParse(String.Join("", Utils.Normalize(commentsNode.InnerText).Where(c => Char.IsDigit(c))), out number);
+                        if (number >= 0)
+                            topic.NumberOfComments = number;
+                    }
+                }
+
+                    // Extract Author and PublishDate
+                    HtmlNode authorNode = topicNode.SelectSingleNode(".//a[contains(@class,'username')]");
                 if (authorNode != null && authorNode.Attributes["title"] != null && !String.IsNullOrWhiteSpace(authorNode.Attributes["title"].Value))
                 {
                     topic.Author = authorNode.InnerText.Trim();
@@ -315,12 +418,13 @@ namespace TopicsParser
                     }
                 }
 
+
                 // Extract Evaluation
                 HtmlNode evaluationNode = topicNode.SelectSingleNode(".//ul[contains(@class,'threadstats')]/li[@class='hidden']");
                 if (evaluationNode != null && !String.IsNullOrWhiteSpace(evaluationNode.InnerText))
                 {
                     double evaluation = GetEvaluation(evaluationNode.InnerText);
-                    if (evaluation > 0)
+                    if (evaluation >= 0)
                         topic.Evaluation = evaluation;
                 }
 
@@ -335,6 +439,7 @@ namespace TopicsParser
             SectionsQueueName       = Utils.LoadConfigurationSetting("SectionsParserQueue", "");
             TopicsQueueName         = Utils.LoadConfigurationSetting("TopicsParserQueue",   "");
             ConfigurationQueueName  = Utils.LoadConfigurationSetting("ConfigurationQueue", "ForumTibiaBR_Config");
+            TopicsCollection        = Utils.LoadConfigurationSetting("TopicCollection","Topics");
         }
 
         private static Section ReadQueue(string queuename)
@@ -347,7 +452,7 @@ namespace TopicsParser
                 // Trying to read the queue
                 object response = MSMQ.ReadPrivateQueue(queuename);
                 string json     = (string) response;
-                section = JsonConvert.DeserializeObject<Section>(Utils.Decompress(json));
+                section         = JsonConvert.DeserializeObject<Section>(Utils.Decompress(json));
             }
             catch (MessageQueueException mqex)
             {
@@ -397,6 +502,7 @@ namespace TopicsParser
         ///  19-09-2004 17:01
         ///  Hoje 11:32
         ///  Ontem 11:58
+        ///  Ontem, 11:37
         /// </summary>
         private static DateTime FormatDateTime(string publishDate)
         {
@@ -408,7 +514,7 @@ namespace TopicsParser
             string hour     = String.Empty;
             string minute   = String.Empty;
 
-            publishDate = publishDate.ToUpper();
+            publishDate = publishDate.Replace(",",String.Empty).ToUpper();
             DateTime formatedDateTime;
             try
             {
@@ -431,7 +537,7 @@ namespace TopicsParser
                 }
 
                 // Date
-                if (date.ToLower().Contains("hoje"))
+                if (date.Contains("HOJE"))
                 {
                     year    = Convert.ToString(DateTime.UtcNow.Year);
                     month   = Convert.ToString(DateTime.UtcNow.Month);
@@ -439,7 +545,7 @@ namespace TopicsParser
 
                     formatedDateTime = new DateTime(Int32.Parse(year), Int32.Parse(month), Int32.Parse(day), Int32.Parse(hour), Int32.Parse(minute), 0);
                 }
-                else if (date.ToLower().Contains("ontem"))
+                else if (date.Contains("ONTEM"))
                 {
                     year    = Convert.ToString(DateTime.UtcNow.Year);
                     month   = Convert.ToString(DateTime.UtcNow.Month);

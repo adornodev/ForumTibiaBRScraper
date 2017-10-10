@@ -1,5 +1,4 @@
 ﻿using HtmlAgilityPack;
-using MongoDB.Bson;
 using MongoDB.Driver;
 using Newtonsoft.Json;
 using NLog;
@@ -16,17 +15,18 @@ namespace SectionsParser
 {
     public class SectionsParser
     {
-        private static string               ConfigFilePath;
-        private static InputConfig   Config;
-        private static Logger               logger = null;
-        private static string               Source = "TibiaBR";
+        private static string                   ConfigFilePath;
+        private static string                   Source = "TibiaBR";
+        private static InputConfig              Config;
+        private static MongoDBUtils<Section>    MongoUtilsObj;
+        private static Logger                   logger = null;
 
         public static void Main(string[] args)
         {
             // Loading New Logger
             logger = LogManager.GetCurrentClassLogger();
 
-            //Initialization AppConfig
+            // Initialization AppConfig
             InitializeAppConfig();
 
             // Load config
@@ -34,6 +34,13 @@ namespace SectionsParser
             if (!ParseConfigurationFile(ConfigFilePath))
             {
                 logger.Fatal("Error parsing configuration file! Aborting...");
+                Environment.Exit(-101);
+            }
+
+            // Initialization Mongo
+            if (!InitializeMongo())
+            {
+                logger.Fatal("Error parsing Mongo variables! Aborting...");
                 Environment.Exit(-101);
             }
 
@@ -75,6 +82,25 @@ namespace SectionsParser
             queue.Send(serializedConfig);
         }
 
+
+        private static bool InitializeMongo()
+        {
+            MongoUtilsObj = new MongoDBUtils<Section>(Config.MongoUser,Config.MongoPassword,Config.MongoAddress,Config.MongoDatabase);
+
+            // Sanit Check
+            if (!MongoUtilsObj.IsValidMongoData(Config))
+                return false;
+
+            // Invalid Collection?
+            if (!MongoUtilsObj.CollectionExistsAsync(Config.MongoCollection).Result)
+                return false;
+
+            // Open the Connection
+            MongoUtilsObj.GetCollection(Config.MongoCollection);
+  
+            return true;
+        }
+
         private static void Execute(Logger logger)
         {
             logger.Info("Start");
@@ -114,7 +140,7 @@ namespace SectionsParser
             }
 
             // Let's save the information
-            if (!String.IsNullOrWhiteSpace(Config.TargetQueue) && String.IsNullOrWhiteSpace(Config.MongoAddress))
+            if (!String.IsNullOrWhiteSpace(Config.TargetQueue) && !MongoUtilsObj.IsValidMongoData(Config))
             {
                 // Send messages to Queue
                 logger.Trace("Sending message to configuration queue...");
@@ -132,26 +158,21 @@ namespace SectionsParser
 
         private static void SendMessage(List<Section> sections)
         {
-            string connectionString = String.Format("mongodb://{0}:{1}@{2}",Config.MongoUser,Config.MongoPassword,Config.MongoAddress);
-
-            IMongoClient    client      = new MongoClient(connectionString);
-            IMongoDatabase  database    = client.GetDatabase(Config.MongoDatabase);
-
-            IMongoCollection<Section> collection = database.GetCollection<Section>(Config.MongoCollection);
 
             // Iterate over all sections
             foreach (Section section in sections)
             {
-                //FindAll -> collection.AsQueryable<Section>().ToList();
 
                 // Before inserting, we need to check if lot was already inserted and update it if this is the case
-                UpdateResult result = collection.UpdateOne( Builders<Section>.Filter.Eq("Url", section.Url),
-                                                            Builders<Section>.Update
-                                                            .Set("NumberOfTopics", section.NumberOfTopics)
-                                                            .Set("NumberOfViews", section.NumberOfViews));
+                UpdateResult result = MongoUtilsObj.collection.UpdateOne(   Builders<Section>.Filter.Eq(r => r.MainUrl, section.MainUrl),
+                                                                            Builders<Section>.Update
+                                                                            .Set("NumberOfTopics"   , section.NumberOfTopics)
+                                                                            .Set("FullUrl"          , section.FullUrl)
+                                                                            .Set("NumberOfViews"    , section.NumberOfViews));
+
                 // New Register
                 if (result.MatchedCount == 0)
-                    collection.InsertOne(section);
+                    MongoUtilsObj.collection.InsertOne(section);
                
             }
         }
@@ -205,7 +226,7 @@ namespace SectionsParser
                 if (section != null)
                 {
                     // Add to list if not already present
-                    if (!sectionObjects.Any(x => x.Url.Equals(section.Url)))
+                    if (!sectionObjects.Any(x => x.MainUrl.Equals(section.MainUrl)))
                         sectionObjects.Add(section);
                 }
             }
@@ -218,8 +239,8 @@ namespace SectionsParser
             string title        = String.Empty;
             string description  = String.Empty;
             string url          = String.Empty;
-            int numberOfViews   = 0;
-            int numberOfTopics  = 0;
+            int numberOfViews   = -1;
+            int numberOfTopics  = -1;
 
             // Is there a section filter?
             string[] relevantSections = new string[] { };
@@ -244,10 +265,12 @@ namespace SectionsParser
 
             logger.Trace("Processing \"{0}\" Section ...", title);
 
+
             // Extract Description
             HtmlNode descriptionNode = node.SelectSingleNode(".//p[@class='forumdescription']");
             if (descriptionNode != null && !String.IsNullOrWhiteSpace(descriptionNode.InnerText))
                 description = descriptionNode.InnerText.Trim();
+
 
             // Is there restriction?
             if (relevantSections.Length >= 1)
@@ -302,11 +325,16 @@ namespace SectionsParser
 
             Section section = new Section();
             section.Source          = Source;
-            section.Url             = url;
+            section.FullUrl         = url;
             section.Title           = title;
             section.Description     = description;
             section.NumberOfTopics  = numberOfTopics;
             section.NumberOfViews   = numberOfViews;
+
+            if (url.Contains("?"))
+                section.MainUrl = url.Substring(0, url.IndexOf("?"));
+            else
+                section.MainUrl = section.FullUrl;
 
             return section;
         }

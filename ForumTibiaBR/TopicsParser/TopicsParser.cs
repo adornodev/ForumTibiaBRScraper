@@ -13,6 +13,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using WebUtilsLib;
+using System.Threading;
 
 namespace TopicsParser
 {
@@ -82,7 +83,7 @@ namespace TopicsParser
             }
             catch (Exception ex)
             {
-                logger.Fatal(ex,"General Exception. \"Execute\" Method");
+                logger.Fatal("General Exception. \"Execute\" Method. Message.: {0}", ex.Message);
                 goto Exit;
             }
 
@@ -116,33 +117,6 @@ namespace TopicsParser
 
                 // Parse Topic
                 DoWork(sec, ref topics, client);
-            }
-
-            //Section section;
-            //while ( (section = ReadQueue(SectionsQueueName)) != null)
-            //{
-            //    if (section == null)
-            //        break;
-
-            //    logger.Trace("Processing \"{0}\" section ...", section.Title);
-
-            //    // Parse Sections
-            //    ParseTopic(section, ref topics, client);
-
-            //    // Insert into sections list
-            //    sections.Add(section);
-
-            //    if (sections.Count % 5 == 0)
-            //    {
-            //        //SendMessage();
-            //        sections.Clear();
-            //    }
-            //}
-            
-            // Has more?
-            if (topics.Count != 0)
-            {
-                //SendMessage();
             }
         }
 
@@ -251,8 +225,8 @@ namespace TopicsParser
 
                     if (topics.Count % 10 == 0 && topics.Count !=0)
                     {
-                        //SendMessage(TopicsQueueName, topics);
                         SendMessage(topics);
+                        //SendMessage(TopicsQueueName, topics);
                         topics.Clear();
                     }
                 }
@@ -263,7 +237,7 @@ namespace TopicsParser
                     continue;
                 }
 
-
+                // Has more?
                 if (topics.Count > 0)
                 {
                     SendMessage(topics);
@@ -290,6 +264,9 @@ namespace TopicsParser
                 // Next Page
                 numberOfPage += 1;
                 url = String.Format(_mapURLs["SectionTopics"], sectionPieceUrl, numberOfPage);
+
+                // Keep Calm and don't shutdown the forum!
+                Thread.Sleep(5 * 1000);
             }
         }
 
@@ -299,17 +276,24 @@ namespace TopicsParser
             // Iterate over all Topics
             foreach (Topic topic in topics)
             {
-                //// Before inserting, we need to check if lot was already inserted and update it if this is the case
-                //UpdateResult result = MongoUtilsTopicObj.collection.UpdateOne(Builders<Topic>.Filter.Eq(reg => reg.Url, topic.Url),
-                //                                                              Builders<Topic>.Update
-                //                                                                 .Set("NumberOfComments", topic.NumberOfComments)
-                //                                                                 .Set("FullUrl", topic.FullUrl)
-                //                                                                 .Set("NumberOfViews", topic.NumberOfViews));
-
-                ReplaceOneResult result2 = MongoUtilsTopicObj.collection.ReplaceOne(Builders<Topic>.Filter.Where(reg => reg.Url.Equals(topic.Url)), topic);
-                
+                // Before inserting, we need to check if lot was already inserted and update it if this is the case
+                UpdateResult result = MongoUtilsTopicObj.collection.UpdateOne(Builders<Topic>.Filter.Eq(reg => reg.Url, topic.Url),
+                                                                              Builders<Topic>.Update
+                                                                                 .Set("Title"               , topic.Title               )
+                                                                                 .Set("Url"                 , topic.Url                 )
+                                                                                 .Set("NumberOfComments"    , topic.NumberOfComments    )
+                                                                                 .Set("NumberOfViews"       , topic.NumberOfViews       )
+                                                                                 .Set("Evaluation"          , topic.Evaluation          )
+                                                                                 .Set("LastPostUsername"    , topic.LastPostUsername    )
+                                                                                 .Set("LastPostPublishDate" , topic.LastPostPublishDate )
+                                                                                 .Set("Status"              , topic.Status              )
+                                                                                 .Set("StatusId"            , topic.StatusId            )
+                                                                                 .Set("SectionTitle"        , topic.SectionTitle        )
+                                                                                 .Set("NumberOfSectionPage" , topic.NumberOfSectionPage )
+                                                                                 .Set("LastCaptureDateTime" , topic.LastCaptureDateTime )
+                                                                                 .Inc(r => r.Version,1));
                 // New Register
-                if (result2.MatchedCount == 0)
+                if (result.MatchedCount == 0)
                     MongoUtilsTopicObj.collection.InsertOne(topic);
 
             }
@@ -380,7 +364,7 @@ namespace TopicsParser
                 HtmlNode numbersNode = topicNode.SelectSingleNode(".//ul[contains(@class,'threadstats')]");
                 if (numbersNode != null)
                 {
-                    HtmlNode viewsNode = numbersNode.SelectSingleNode("./li[position()=1]");
+                    HtmlNode viewsNode = numbersNode.SelectSingleNode("./li[position()=2]");
 
                     int number = -1;
                     if (viewsNode != null)
@@ -393,16 +377,19 @@ namespace TopicsParser
                     number = -1;
 
                     HtmlNode commentsNode = numbersNode.SelectSingleNode(".//dd[last()]");
+                    if (commentsNode == null)
+                        commentsNode = numbersNode.SelectSingleNode(".//li");
+
                     if (commentsNode != null)
                     {
                         Int32.TryParse(String.Join("", Utils.Normalize(commentsNode.InnerText).Where(c => Char.IsDigit(c))), out number);
-                        if (number >= 0)
+                        if (number > 0)
                             topic.NumberOfComments = number;
                     }
                 }
 
-                    // Extract Author and PublishDate
-                    HtmlNode authorNode = topicNode.SelectSingleNode(".//a[contains(@class,'username')]");
+                // Extract Author and PublishDate
+                HtmlNode authorNode = topicNode.SelectSingleNode(".//a[contains(@class,'username')]");
                 if (authorNode != null && authorNode.Attributes["title"] != null && !String.IsNullOrWhiteSpace(authorNode.Attributes["title"].Value))
                 {
                     topic.Author = authorNode.InnerText.Trim();

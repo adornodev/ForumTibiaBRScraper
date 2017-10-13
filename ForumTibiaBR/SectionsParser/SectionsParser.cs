@@ -44,7 +44,7 @@ namespace SectionsParser
                 Environment.Exit(-101);
             }
 
-            // Save input fields
+            // Save configuration input fields
             SaveFields();
 
             try
@@ -130,7 +130,7 @@ namespace SectionsParser
 
 
             //Scrape Urls
-            logger.Trace("Scraping section urls");
+            logger.Trace("Scraping section urls...");
             List<Section> sections = ScrapeSections(map);
 
             if (sections == null || sections.Count == 0)
@@ -207,7 +207,7 @@ namespace SectionsParser
         {
             List<Section> sectionObjects = new List<Section>();
            
-            // Get section urls
+            // Get section nodes
             HtmlNodeCollection secNodes = map.DocumentNode.SelectNodes(Config.SectionXPath);
 
             // Sanity Check
@@ -217,11 +217,24 @@ namespace SectionsParser
                 return null;
             }
 
-            // Iterate over all section urls
+            // Is there a section filter?
+            string[] relevantSections = new string[] { };
+
+            if (Config.SectionsList.Contains(","))
+                relevantSections = Config.SectionsList.Split(new[] { "," }, StringSplitOptions.RemoveEmptyEntries);
+            else if (!String.IsNullOrWhiteSpace(Config.SectionsList))
+                relevantSections = new[] { Config.SectionsList.Trim() };
+
+            // Check relevantSections
+            if (relevantSections == null)
+                logger.Debug("Relevat Sections could not be found");
+
+
+            // Iterate over all section nodes
             foreach (HtmlNode node in secNodes)
             {
                 // Section Parser with some information
-                Section section = ParseSectionInitInfo(node);
+                Section section = ParseSection(node, relevantSections);
 
                 if (section != null)
                 {
@@ -234,27 +247,13 @@ namespace SectionsParser
             return sectionObjects;
         }
 
-        private static Section ParseSectionInitInfo(HtmlNode node)
+        private static Section ParseSection(HtmlNode node, string[] relevantSections)
         {
             string title        = String.Empty;
             string description  = String.Empty;
             string url          = String.Empty;
             int numberOfViews   = -1;
             int numberOfTopics  = -1;
-
-            // Is there a section filter?
-            string[] relevantSections = new string[] { };
-
-            if (Config.SectionsList.Contains(","))
-                relevantSections = Config.SectionsList.Split(new[] { "," }, StringSplitOptions.RemoveEmptyEntries);
-            else if (!String.IsNullOrWhiteSpace(Config.SectionsList))
-                relevantSections = new[] { Config.SectionsList.Trim() };
-
-            // Check relevantSections
-            if (relevantSections == null)
-            {
-                logger.Debug("Relevat Sections could not be found");
-            }
 
 
             // Extract Title
@@ -322,7 +321,7 @@ namespace SectionsParser
             else
                 return null;
 
-
+            // Initialize Section Object
             Section section = new Section();
             section.Source          = Source;
             section.FullUrl         = url;

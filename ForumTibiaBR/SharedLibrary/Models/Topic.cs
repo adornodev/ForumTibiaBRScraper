@@ -46,12 +46,14 @@ namespace SharedLibrary.Models
         public int          NumberOfSectionPage         { get; set; }
 
         public DateTime     FirstCaptureDateTime        { get; set; }
+        public DateTime     LastCaptureDateTime         { get; set; }
         public int          Version                     { get; set; } // amount of times this auction was captured
 
         public Topic ()
         {
             this.Version              = 0;
             this.FirstCaptureDateTime = DateTime.UtcNow;
+            this.LastCaptureDateTime  = DateTime.UtcNow;
             this.NumberOfComments     = -1;
             this.NumberOfViews        = -1;
             this.Evaluation           = -1.0;

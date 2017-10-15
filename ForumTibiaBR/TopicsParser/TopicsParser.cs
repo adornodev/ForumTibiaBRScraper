@@ -9,7 +9,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Messaging;
-using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using WebUtilsLib;
@@ -27,9 +26,9 @@ namespace TopicsParser
         private static string                   ConfigurationQueueName;
         private static string                   TopicsCollection;
         private static InputConfig              Config;
-        private static Logger                   logger = null;
         private static MongoDBUtils<Section>    MongoUtilsSectionObj;
         private static MongoDBUtils<Topic>      MongoUtilsTopicObj;
+        private static Logger                   logger = null;
 
         private static Dictionary<string, string> _mapURLs = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
@@ -39,7 +38,6 @@ namespace TopicsParser
 
         #endregion
 
-
         public static void Main(string[] args)
         {
             // Loading New Logger
@@ -48,10 +46,10 @@ namespace TopicsParser
             //Initialization AppConfig
             InitializeAppConfig();
 
-
-            // Get Content of Configuration Queue
             try
             {
+                // Get Content from Configuration Queue
+                logger.Debug("Getting Content from Configuration Queue...");
                 Config = MSMQUtils.GetContentConfigurationQueue(ConfigurationQueueName);
             }
             catch (MessageQueueException mqex)
@@ -70,15 +68,16 @@ namespace TopicsParser
 
 
             // Initialization Mongo
+            logger.Debug("Initializing MongoDB...");
             if (!InitializeMongo())
             {
                 logger.Fatal("Error parsing Mongo variables! Aborting...");
-                Environment.Exit(-101);
+                goto Exit;
             }
 
             try
             {
-                // Main
+                // Main Method
                 Execute(logger);
             }
             catch (Exception ex)
@@ -101,23 +100,27 @@ namespace TopicsParser
             WebRequests client = new WebRequests();
             InitializeWebRequest(ref client);
 
-            // Lists that will be filled with compressed serialized object
+            // List that will be filled with compressed serialized object
             List<Topic>   topics   = new List<Topic>();
-
-
-            MongoUtilsSectionObj.GetCollection(Config.MongoCollection);
-
-            List<Section> sections = MongoUtilsSectionObj.collection.AsQueryable<Section>().ToList();
-
-
-            // Iterate over all Sections
-            foreach(Section sec in sections)
+           
+            while (true)
             {
-                logger.Trace("Processing \"{0}\" section ...", sec.Title);
+                // Read messages from Section Queue
+                Section section = ReadQueue(SectionsQueueName);
 
-                // Parse Topic
-                DoWork(sec, ref topics, client);
+                logger.Trace("Processing \"{0}\" section...", section.Title);
+
+                // Parse Topics from section and Save on TopicCollection/TopicQueue
+                DoWork(section, ref topics, client);
+
+                // Stopping for 30 minutes
+                Thread.Sleep(30 * 60000);
             }
+            
+            //// Taking the Sections records in the collection
+            //MongoUtilsSectionObj.GetCollection(Config.MongoCollection);
+            //List<Section> sections = MongoUtilsSectionObj.collection.AsQueryable<Section>().ToList();
+
         }
 
         private static bool InitializeMongo()
@@ -171,8 +174,12 @@ namespace TopicsParser
             // Iterate over all topics
             foreach (Topic topic in topics)
             {
-                string serializedTopic = Utils.Compress(JsonConvert.SerializeObject(topic));
-                queue.Send(serializedTopic);
+                var compactTopic = new { Title = topic.Title,
+                                         Url   = topic.Url
+                                       };
+
+                string serializedCompactTopic = Utils.Compress(JsonConvert.SerializeObject(compactTopic));
+                queue.Send(serializedCompactTopic);
             }
 
             queue.Dispose();
@@ -199,6 +206,7 @@ namespace TopicsParser
             {
                 logger.Trace("Section {0} ... Page: {1}", section.Title, numberOfPage);
 
+
                 // Get Request
                 string htmlResponse = SharedLibrary.Utils.WebRequestsUtils.Get(ref client, logger, url);
 
@@ -223,10 +231,10 @@ namespace TopicsParser
                 {
                     ParseTopic(topicsNode, ref section, numberOfPage, ref topics);
 
-                    if (topics.Count % 10 == 0 && topics.Count !=0)
+                    if (topics.Count % 10 == 0 && topics.Count != 0)
                     {
                         SendMessage(topics);
-                        //SendMessage(TopicsQueueName, topics);
+                        SendMessage(TopicsQueueName, topics);
                         topics.Clear();
                     }
                 }
@@ -241,7 +249,7 @@ namespace TopicsParser
                 if (topics.Count > 0)
                 {
                     SendMessage(topics);
-                    //SendMessage(TopicsQueueName, topics);
+                    SendMessage(TopicsQueueName, topics);
                     topics.Clear();
                 }
 
@@ -266,7 +274,7 @@ namespace TopicsParser
                 url = String.Format(_mapURLs["SectionTopics"], sectionPieceUrl, numberOfPage);
 
                 // Keep Calm and don't shutdown the forum!
-                Thread.Sleep(5 * 1000);
+                Thread.Sleep(2 * 1000);
             }
         }
 
@@ -437,7 +445,7 @@ namespace TopicsParser
             try
             {
                 // Trying to read the queue
-                object response = MSMQ.ReadPrivateQueue(queuename);
+                object response = MSMQ.ReadPrivateQueue(queuename, timeoutInMinutes:1);
                 string json     = (string) response;
                 section         = JsonConvert.DeserializeObject<Section>(Utils.Decompress(json));
             }
@@ -446,10 +454,14 @@ namespace TopicsParser
                 logger.Fatal(mqex, mqex.Message);
                 section = null;
             }
+            catch(Exception ex)
+            {
+                logger.Fatal("Error in ReadQueue Method. Message.: {0} ", ex.Message);
+                section = null;
+            }
 
             return section;
         }
-
 
         /// <summary>
         /// Example: Avaliação4 / 5

@@ -30,22 +30,24 @@ namespace SectionsParser
             InitializeAppConfig();
 
             // Load config
-            logger.Trace("Loading config file");
+            logger.Debug("Loading config file...");
             if (!ParseConfigurationFile(ConfigFilePath))
             {
                 logger.Fatal("Error parsing configuration file! Aborting...");
-                Environment.Exit(-101);
+                goto Exit;
             }
 
             // Initialization Mongo
+            logger.Debug("Initializing MongoDB...");
             if (!InitializeMongo())
             {
                 logger.Fatal("Error parsing Mongo variables! Aborting...");
-                Environment.Exit(-101);
+                goto Exit;
             }
 
             // Save configuration input fields
-            SaveFields();
+            logger.Debug("Saving Configuration Fields...");
+            SaveConfigurationFields();
 
             try
             {
@@ -54,14 +56,15 @@ namespace SectionsParser
             }
             catch (Exception ex)
             {
-                logger.Fatal(ex,"General Exception. \"Execute\" Method");
+                logger.Fatal("General Exception. \"Execute\" Method. Message.: {0}", ex.Message);
             }
 
+            Exit:
             Console.Write("Press any key...");
             Console.ReadKey();
         }
 
-        private static void SaveFields()
+        private static void SaveConfigurationFields()
         {
             MSMQUtils MSMQ = new MSMQUtils();
 
@@ -77,11 +80,11 @@ namespace SectionsParser
 
             // Is there content in the queue? Let's remove it
             MSMQ.DeleteContentPrivateQueue(Config.WebRequestConfigQueue);
-            
+
+            // Serialize the objectc to take up less space
             string serializedConfig = Utils.Compress(JsonConvert.SerializeObject(Config));
             queue.Send(serializedConfig);
         }
-
 
         private static bool InitializeMongo()
         {
@@ -118,13 +121,13 @@ namespace SectionsParser
             if (String.IsNullOrWhiteSpace(htmlResponse))
             {
                 logger.Fatal("HtmlResponse is null or empty");
-                Environment.Exit(-101);
+                return;
             }
   
-
             client.Dispose();
 
-            // Loading HTML into MAP
+
+            // Loading htmlResponse into HtmlDocument
             HtmlDocument map = new HtmlDocument();
             map.LoadHtml(htmlResponse);
 
@@ -133,32 +136,32 @@ namespace SectionsParser
             logger.Trace("Scraping section urls...");
             List<Section> sections = ScrapeSections(map);
 
+            // Check if any section was processed
             if (sections == null || sections.Count == 0)
             {
                 logger.Fatal("Couldn't build any section object. Aborting program");
-                Environment.Exit(-103);
+                goto Exit;
             }
 
-            // Let's save the information
-            if (!String.IsNullOrWhiteSpace(Config.TargetQueue) && !MongoUtilsObj.IsValidMongoData(Config))
+            // Let's save the section's object
+            if (!String.IsNullOrWhiteSpace(Config.TargetQueue) && MongoUtilsObj.IsValidMongoData(Config))
             {
                 // Send messages to Queue
                 logger.Trace("Sending message to configuration queue...");
                 SendMessage(Config.TargetQueue, sections);
-            }
-            else
-            {
-                // Send messages to collection
+
                 logger.Trace("Sending message to MongoCollection...");
                 SendMessage(sections);
             }
+            else
+                logger.Fatal("Error to save section's object. You need to check if there is something wrong with the information in the mongo/queue fields in the input file.");
 
+            Exit:
             logger.Info("End");
         }
 
         private static void SendMessage(List<Section> sections)
         {
-
             // Iterate over all sections
             foreach (Section section in sections)
             {
@@ -330,6 +333,7 @@ namespace SectionsParser
             section.NumberOfTopics  = numberOfTopics;
             section.NumberOfViews   = numberOfViews;
 
+            // Is it necessary fix the MainUrl?s
             if (url.Contains("?"))
                 section.MainUrl = url.Substring(0, url.IndexOf("?"));
             else

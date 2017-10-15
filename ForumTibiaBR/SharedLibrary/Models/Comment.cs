@@ -25,7 +25,9 @@ namespace SharedLibrary.Models
         public User         User                    { get; set; }
         [Required]
         public string       Text                    { get; set; }
-        public int          Version                 { get; set; } // amount of times this auction was captured
+        [Required]
+        public string       TopicTitle              { get; set; }
+        public int          Version                 { get; set; } // amount of times this comment was captured
 
         public Comment ()
         {

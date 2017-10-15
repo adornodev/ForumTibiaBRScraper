@@ -1,11 +1,11 @@
 ﻿using MongoDB.Bson;
 using MongoDB.Bson.Serialization.Attributes;
-using System;
-using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using System.Runtime.Serialization;
 
 namespace SharedLibrary.Models
 {
+    [DataContract]
     public class Section
     {
         [BsonId]
@@ -14,11 +14,14 @@ namespace SharedLibrary.Models
 
         [Required]
         public string Source        { get; set; }
+
+        [DataMember]
         [Required(ErrorMessageResourceType = typeof(Languages.Language),ErrorMessageResourceName = "SECTION_ERROR_VALIDATION_Title")]
         public string Title         { get; set; }
 
         public string Description   { get; set; }
 
+        [DataMember]
         [Required(ErrorMessageResourceType = typeof(Languages.Language), ErrorMessageResourceName = "SECTION_ERROR_VALIDATION_Url")]
         [Url]
         public string FullUrl       { get; set; }
@@ -30,6 +33,9 @@ namespace SharedLibrary.Models
         public int NumberOfTopics   { get; set; }
 
         public int NumberOfViews    { get; set; }
+
+        [DataMember]
+        public int NumberOfAttempts { get; set; }
 
         public Section ()
         {

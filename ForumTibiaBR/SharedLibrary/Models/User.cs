@@ -31,7 +31,7 @@ namespace SharedLibrary.Models
 
         public User ()
         {
-            this.NumberOfComments = -1;
+            this.NumberOfComments = 0;
             this.Version          = 0;
         }
     }

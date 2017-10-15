@@ -47,7 +47,7 @@ namespace SharedLibrary.Models
 
         public DateTime     FirstCaptureDateTime        { get; set; }
         public DateTime     LastCaptureDateTime         { get; set; }
-        public int          Version                     { get; set; } // amount of times this auction was captured
+        public int          Version                     { get; set; } // amount of times this topic was captured
 
         public Topic ()
         {

@@ -15,6 +15,8 @@ namespace SharedLibrary.Utils
             {
                 case Enums.Status.Normal:
                     return "Normal";
+                case Enums.Status.Moved:
+                    return "Moved";
                 case Enums.Status.Fixed:
                     return "Fixed";
             }

@@ -28,6 +28,7 @@ namespace SharedLibrary.Utils
             }
             else
             {
+                // Iniatilize a new queue
                 MessageQueue.Create(queuename);
 
                 messageQueue        = new MessageQueue(queuename);
@@ -43,6 +44,7 @@ namespace SharedLibrary.Utils
 
             MessageQueue messageQueue = null;
 
+            // Complete Queuename
             queuename = String.Concat(MSMQPrivatePath, queuename);
 
             // Sanit check
@@ -64,6 +66,7 @@ namespace SharedLibrary.Utils
             else
                 messageReceived = messageQueue.Peek(new TimeSpan(0, timeoutInMinutes, 0));
                         
+            // Sanit Check
             if (messageReceived == null)
                 return null;
 
@@ -131,7 +134,10 @@ namespace SharedLibrary.Utils
         {
             MSMQUtils MSMQ = new MSMQUtils();
 
+            // Read Private Queue 
             object obj  = MSMQ.ReadPrivateQueue(configurationQueueName, persist: true);
+
+            // Decompress string to json format
             string json = Utils.Decompress((string)obj);
 
             // Deserialize

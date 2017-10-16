@@ -16,6 +16,11 @@ namespace SharedLibrary.Models
         [BsonRepresentation(BsonType.ObjectId)]
         public string       _id                     { get; set; }
         [Required]
+        public string       Source                  { get; set; }
+        [Required]
+        [Url]
+        public string       Url                     { get; set; }
+        [Required]
         public string       Author                  { get; set; }
         public DateTime     FirstCaptureDateTime    { get; set; }
         public DateTime     LastCaptureDateTime     { get; set; }
@@ -26,7 +31,10 @@ namespace SharedLibrary.Models
         [Required]
         public string       Text                    { get; set; }
         [Required]
+        public int          Position                { get; set; }
+        [Required]
         public string       TopicTitle              { get; set; }
+        public int          NumberOfPage            { get; set; }
         public int          Version                 { get; set; } // amount of times this comment was captured
 
         public Comment ()
@@ -34,6 +42,7 @@ namespace SharedLibrary.Models
             this.FirstCaptureDateTime = DateTime.UtcNow;
             this.LastCaptureDateTime  = DateTime.UtcNow;
             this.Version              = 0;
+            this.NumberOfPage         = -1;
         }
     }
 }

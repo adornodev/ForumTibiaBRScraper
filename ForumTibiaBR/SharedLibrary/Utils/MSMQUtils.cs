@@ -135,7 +135,7 @@ namespace SharedLibrary.Utils
             MSMQUtils MSMQ = new MSMQUtils();
 
             // Read Private Queue 
-            object obj  = MSMQ.ReadPrivateQueue(configurationQueueName, persist: true);
+            object obj  = MSMQ.ReadPrivateQueue(configurationQueueName, timeoutInMinutes: 1, persist: true);
 
             // Decompress string to json format
             string json = Utils.Decompress((string)obj);

@@ -194,8 +194,8 @@ namespace TopicsParser
    
             
             // Find the right URL
-            Regex locationRegex = new Regex(@"\/(\d{1,4}.*)\?", RegexOptions.Compiled | RegexOptions.IgnoreCase);
-            Match match = locationRegex.Match(section.FullUrl);
+            Regex importantPieceUrlRegex = new Regex(@"\/(\d{1,4}.*)\?", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+            Match match = importantPieceUrlRegex.Match(section.FullUrl);
             if (match.Success)
             {
                 sectionPieceUrl = match.Groups[1].Value.Trim();

@@ -15,6 +15,8 @@ namespace SharedLibrary.Models
         [BsonRepresentation(BsonType.ObjectId)]
         public string   _id                     { get; set; }
         [Required]
+        public string   Source                  { get; set; }
+        [Required]
         public string   Name                    { get; set; }
         public DateTime RegisterDate            { get; set; }
         [Required]
@@ -24,9 +26,6 @@ namespace SharedLibrary.Models
         [Required]
         [Url]
         public string   Url                     { get; set; }
-        public string   Location                { get; set; }
-        public string   Signature               { get; set; }
-        public int      Age                     { get; set; }
         public int      Version                 { get; set; }
 
         public User ()

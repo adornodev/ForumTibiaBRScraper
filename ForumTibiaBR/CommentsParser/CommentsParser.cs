@@ -26,10 +26,12 @@ namespace CommentsParser
         private static string CommentsQueueName;
         private static string ConfigurationQueueName;
         private static string CommentsCollection;
+        private static string UsersCollection;
         private static InputConfig Config;
         private static MongoDBUtils<Topic>   MongoUtilsTopicObj;
         private static MongoDBUtils<Comment> MongoUtilsCommentObj;
-        private static Logger logger = null;
+        private static MongoDBUtils<User>    MongoUtilsUserObj;
+        private static Logger                logger = null;
 
         private static Dictionary<string, string> _mapURLs = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
@@ -109,13 +111,23 @@ namespace CommentsParser
                 // Read messages from Section Queue
                 Topic topic = ReadQueue(TopicsQueueName);
 
+                // No more messages?
+                if (topic == null)
+                {
+                    logger.Debug("Topic is null.");
+                    break;
+                }
+
                 logger.Trace("Processing \"{0}\" topic...", topic.Title);
 
                 // Parse Comment from Topic and Save on CommentCollection/CommentQueue
-                DoWork(topic, ref comments, client);
+                bool processsed = DoTheWork(topic, ref comments, client);
 
-                // Stopping for 30 minutes
-                Thread.Sleep(30 * 60000);
+                if (!processsed)
+                    Thread.Sleep(10000);
+                else
+                    // Stopping for 30 minutes
+                    Thread.Sleep(30 * 60000);
             }
         }
 
@@ -123,18 +135,22 @@ namespace CommentsParser
         {
             MongoUtilsTopicObj      = new MongoDBUtils<Topic>(Config.MongoUser, Config.MongoPassword, Config.MongoAddress, Config.MongoDatabase);
             MongoUtilsCommentObj    = new MongoDBUtils<Comment>(Config.MongoUser, Config.MongoPassword, Config.MongoAddress, Config.MongoDatabase);
+            MongoUtilsUserObj       = new MongoDBUtils<User>(Config.MongoUser, Config.MongoPassword, Config.MongoAddress, Config.MongoDatabase);
 
             // Sanit Check
             if (!MongoUtilsTopicObj.IsValidMongoData(Config))
                 return false;
 
             // Invalid Collection?
-            if (!MongoUtilsTopicObj.CollectionExistsAsync(Config.MongoCollection).Result || !MongoUtilsCommentObj.CollectionExistsAsync(CommentsCollection).Result)
+            if (!MongoUtilsTopicObj.CollectionExistsAsync(Config.MongoCollection).Result 
+                || !MongoUtilsCommentObj.CollectionExistsAsync(CommentsCollection).Result
+                || !MongoUtilsUserObj.CollectionExistsAsync(UsersCollection).Result)
                 return false;
 
             // Open the Connection
             MongoUtilsTopicObj.GetCollection(Config.MongoCollection);
             MongoUtilsCommentObj.GetCollection(CommentsCollection);
+            MongoUtilsUserObj.GetCollection(UsersCollection);
 
             return true;
         }
@@ -181,7 +197,7 @@ namespace CommentsParser
             queue.Dispose();
         }
 
-        private static void DoWork(Topic topic, ref List<Comment> comments, WebRequests client)
+        private static bool DoTheWork(Topic topic, ref List<Comment> comments, WebRequests client)
         {
             int numberOfPage = 1;
 
@@ -189,7 +205,13 @@ namespace CommentsParser
             string topicPieceUrl   = String.Empty;
 
             // Find the right URL
-            Regex importantPieceUrlRegex = new Regex(@"\/(\d{1,4}.*)\?", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+            Regex importantPieceUrlRegex = null;
+
+            if (topic.Url.Contains("?"))
+                importantPieceUrlRegex = new Regex(@"/(\d{1,4}.*)\?", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+            else
+                importantPieceUrlRegex = new Regex(@"/(\d{1,4}.*)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
             Match match = importantPieceUrlRegex.Match(topic.Url);
             if (match.Success)
             {
@@ -200,7 +222,6 @@ namespace CommentsParser
             while (!String.IsNullOrWhiteSpace(url))
             {
                 logger.Trace("Topic <{0}> ... Page: {1}", topic.Title, numberOfPage);
-
 
                 // Get Request
                 string htmlResponse = SharedLibrary.Utils.WebRequestsUtils.Get(ref client, logger, url);
@@ -229,12 +250,20 @@ namespace CommentsParser
                     if (comments.Count % 5 == 0 && comments.Count != 0)
                     {
                         SendMessage(comments);
-                        SendMessage(CommentsQueueName, comments);
+                        //SendMessage(CommentsQueueName, comments);
                         comments.Clear();
                     }
                 }
                 else
                 {
+                    // Need permission to parser?
+                    HtmlNode permissionNode = htmlDoc.DocumentNode.SelectSingleNode("//div[@class='blockbody formcontrols']");
+                    if (permissionNode != null)
+                    {
+                        logger.Warn("Permission Error to access the topic");
+                        return false;
+                    }
+
                     logger.Warn("Problem to extract commentsNode");
                     numberOfPage += 1;
                     continue;
@@ -244,23 +273,26 @@ namespace CommentsParser
                 if (comments.Count > 0)
                 {
                     SendMessage(comments);
-                    SendMessage(CommentsQueueName, comments);
+                    //SendMessage(CommentsQueueName, comments);
                     comments.Clear();
                 }
 
                 // Is it the last Page?
                 HtmlNode statsPageNode = htmlDoc.DocumentNode.SelectSingleNode(".//div[@class='threadpagestats']");
+                if (statsPageNode == null)
+                    statsPageNode = htmlDoc.DocumentNode.SelectSingleNode(".//div[@class='postpagestats']");
                 if (statsPageNode != null)
                 {
                     string stats = statsPageNode.InnerText.Trim();
 
-                    Regex statsRegex = new Regex(@"\s(\d{1,})\sa\s(\d{1,})", RegexOptions.Compiled);
+                    //Regex statsRegex = new Regex(@"\s(\d{1,})\sa\s(\d{1,})", RegexOptions.Compiled);
+                    Regex statsRegex = new Regex(@"\s\d{1,}\sa\s(\d{1,})\sde\s(\d{1,})", RegexOptions.Compiled);
                     match = statsRegex.Match(stats);
 
                     if (match.Success)
                     {
                         if (match.Groups.Count == 3 && match.Groups[1].Value.Trim().Equals(match.Groups[2].Value.Trim()))
-                            break;
+                            return false;
                     }
                 }
 
@@ -271,6 +303,8 @@ namespace CommentsParser
                 // Keep Calm and do not shutdown the forum!
                 Thread.Sleep(2 * 1000);
             }
+
+            return true;
         }
 
         private static void SendMessage(List<Comment> comments)
@@ -309,32 +343,19 @@ namespace CommentsParser
                 if (textNode != null && !String.IsNullOrWhiteSpace(textNode.InnerText.Trim()))
                     comment.Text = Utils.Normalize(textNode.InnerText.Trim());
 
-                // Sanit Check
-                if (String.IsNullOrWhiteSpace(comment.Text))
-                    return;
 
                 // Trace Message
-                logger.Trace("Topic <{0}> ... Page: <{1}> ... Comment: {2}", topic.Title, numberOfPage, (comment.Text.Length > 10) ? String.Concat(comment.Text.Substring(0,10)," ...") : comment.Text);
+                //logger.Trace("Topic <{0}> ... Page: <{1}> ... Comment: {2}", topic.Title, numberOfPage, (comment.Text.Length > 20) ? String.Concat(comment.Text.Substring(0,20)," ...") : comment.Text);
 
 
-                // Get href
+                // Extract URL and Position
                 HtmlNode urlNode = commentNode.SelectSingleNode(".//span[@class='nodecontrols']/a");
-                if (urlNode != null && urlNode.Attributes["href"] != null)
-                    comment.Url = urlNode.Attributes["href"].Value.Trim();
+                ExtractHrefCommentPosition(ref comment, urlNode);
 
-                // Complete Href
-                if (!comment.Url.StartsWith("http"))
-                    comment.Url = Utils.AbsoluteUri(Config.Host, comment.Url);
+                // Sanit check
+                if (String.IsNullOrWhiteSpace(comment.Url))
+                    return;
 
-                // Fixing Href
-                Regex importantPieceUrlRegex = new Regex(@"\/(\d{1,4}.*)\?", RegexOptions.Compiled | RegexOptions.IgnoreCase);
-                Match match = importantPieceUrlRegex.Match(comment.Url);
-                if (match.Success)
-                {
-                    string commentPieceUrl = match.Groups[1].Value.Trim();
-                    comment.Url = String.Concat(comment.Url.Substring(0, comment.Url.IndexOf(commentPieceUrl) + commentPieceUrl.Length + 1), comment.Url.Substring(comment.Url.IndexOf("&p")));
-                    
-                }
 
                 // Get Author
                 HtmlNode authorNode = commentNode.SelectSingleNode(".//div[@class='userinfo']//a[contains(@class,'username')]");
@@ -355,10 +376,123 @@ namespace CommentsParser
                     }
                 }
 
+                // Extract User Object
+                HtmlNode userNOde = commentNode.SelectSingleNode(".//div[@class='userinfo']");
+                ExtractUser(ref comment, userNOde);
 
                 // Insert into comments list
                 comments.Add(comment);
+
             }
+        }
+
+        private static void ExtractUser(ref Comment comment, HtmlNode node)
+        {
+            // Sanit Check
+            if (node == null)
+                return;
+
+            // Initialize User Object
+            User user   = new User();
+            user.Source = Source;
+            user.Name   = comment.Author;
+
+            
+            // Extract Url
+            HtmlNode urlNode = node.SelectSingleNode(".//a");
+            if (urlNode != null && urlNode.Attributes["href"] != null)
+            {
+                user.Url = urlNode.GetAttributeValue("href", String.Empty);
+
+                // Fixing URL
+                if (user.Url.Contains("?s"))
+                    user.Url = user.Url.Substring(0, user.Url.IndexOf("?s"));
+
+                // Complete URL
+                if (!user.Url.StartsWith("http"))
+                    user.Url = Utils.AbsoluteUri(Config.Host, user.Url);
+            }
+
+            // Extract RegisterDate
+            HtmlNode registerDateNode = node.SelectSingleNode(".//dl[@class='userinfo_extra']/dd");
+            if (registerDateNode != null)
+            {
+                string registerDate = registerDateNode.InnerText.Trim();
+
+                DateTime dateTime = FormatDateTime(registerDate);
+                if (dateTime != DateTime.MinValue)
+                {
+                    user.RegisterDate = dateTime;
+                }
+            }
+
+            // Get Number of Comments
+            HtmlNode numberCommentsNode = node.SelectSingleNode(".//dl[@class='userinfo_extra']/dd[last()]");
+            if (numberCommentsNode != null)
+            {
+                int number = 0;
+                Int32.TryParse(numberCommentsNode.InnerText.Trim(), out number);
+
+                if (number > 0)
+                    user.NumberOfComments = number;
+            }
+
+            // Extract Rank
+            HtmlNode rankNode = node.SelectSingleNode(".//span[@class='rank']/img");
+            if (rankNode != null && rankNode.Attributes["src"] != null)
+            {
+                Regex rankRegex = new Regex(@"\/(\w{1,}).(p|j)", RegexOptions.Compiled);
+                Match match     = rankRegex.Match(rankNode.Attributes["src"].Value.Trim());
+
+                if (match.Success)
+                    user.Rank = match.Groups[1].Value;
+
+            }
+
+            comment.User = user;
+        }
+
+        private static void ExtractHrefCommentPosition(ref Comment comment, HtmlNode node)
+        {
+            // Sanit Check
+            if (node == null || node.Attributes["href"] == null)
+                return;
+
+            // Get URL
+            comment.Url = node.Attributes["href"].Value.Trim();
+
+            // Complete URL
+            if (!comment.Url.StartsWith("http"))
+                comment.Url = Utils.AbsoluteUri(Config.Host, comment.Url);
+
+            // Fixing URL
+            Regex importantPieceUrlRegex = new Regex(@"\/(\d{1,4}.*)\?", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+            Match match = importantPieceUrlRegex.Match(comment.Url);
+            if (match.Success)
+            {
+                string commentPieceUrl = match.Groups[1].Value.Trim();
+
+                string firstPiece  = comment.Url.Substring(0, comment.Url.IndexOf(commentPieceUrl) + commentPieceUrl.Length + 1);
+                string secondPiece = String.Empty;
+
+                if (comment.Url.Contains("&p"))
+                    secondPiece = comment.Url.Substring(comment.Url.IndexOf("&p"));
+                else if (comment.Url.Contains("&viewfull"))
+                {
+                    secondPiece = comment.Url.Substring(comment.Url.IndexOf("&viewfull"));
+                    firstPiece  = firstPiece.Substring(0,firstPiece.Length -1);
+                }
+
+                comment.Url = String.Concat(firstPiece, secondPiece);
+            }
+
+            // Get Position
+            try
+            {
+                if (!String.IsNullOrWhiteSpace(node.InnerText.Trim()))
+                    comment.Position = Int32.Parse(node.InnerText.Replace("#", String.Empty).Trim());
+            }
+            catch {  }
         }
 
         private static void InitializeAppConfig()
@@ -367,6 +501,7 @@ namespace CommentsParser
             CommentsQueueName       = Utils.LoadConfigurationSetting("CommentParserQueue", "");
             ConfigurationQueueName  = Utils.LoadConfigurationSetting("ConfigurationQueue", "ForumTibiaBR_Config");
             CommentsCollection      = Utils.LoadConfigurationSetting("CommentCollection", "Comments");
+            UsersCollection         = Utils.LoadConfigurationSetting("UserCollection", "Users");
         }
 
         private static Topic ReadQueue(string queuename)
@@ -399,6 +534,7 @@ namespace CommentsParser
         /// Date Example:
         ///  19-09-2004 17:01
         ///  13-10-2017, 10:41
+        ///  09-09-2015
         ///  Hoje 11:32
         ///  Ontem 11:58
         ///  Ontem, 11:37
@@ -410,17 +546,52 @@ namespace CommentsParser
             string year     = String.Empty;
             string month    = String.Empty;
             string day      = String.Empty;
-            string hour     = String.Empty;
-            string minute   = String.Empty;
+            string hour     = "00";
+            string minute   = "00";
 
-            publishDate = publishDate.Replace(",", String.Empty).Replace(Encoding.ASCII.GetString(new byte[] { 160 }), String.Empty).ToUpper();
+            publishDate = publishDate.Replace(",", String.Empty).ToUpper();
             DateTime formatedDateTime;
             try
             {
                 string[] separator = new string[] { " " };
 
-                date = publishDate.Split(separator, StringSplitOptions.None)[0].Trim();
-                time = publishDate.Split(separator, StringSplitOptions.None)[1].Trim();
+
+                if (publishDate.Contains("-") && publishDate.Contains(":"))
+                {
+                    Regex timeRegex = new Regex(@"(\d{1,2}:\d{1,2}$)", RegexOptions.Compiled);
+                    Match match = timeRegex.Match(publishDate);
+                    if (match.Success)
+                    {
+                        time = match.Groups[1].Value.Trim();
+                    }
+
+                    Regex dateRagex = new Regex(@"(\d{1,2}-\d{1,2}-\d{2,4})", RegexOptions.Compiled);
+                    match = dateRagex.Match(publishDate);
+                    if (match.Success)
+                    {
+                        date = match.Groups[1].Value.Trim();
+
+                        year    = date.Split('-')[2];
+                        month   = date.Split('-')[1];
+                        day     = date.Split('-')[0];
+                    }
+                }
+                else
+                {
+                    // Example: 09-09-2015
+                    if (publishDate.Contains("-") && publishDate.Split('-').Length == 3)
+                    {
+                        year    = publishDate.Split('-')[2];
+                        month   = publishDate.Split('-')[1];
+                        day     = publishDate.Split('-')[0];
+
+                    }
+                    else
+                    {
+                        date = publishDate.Split(separator, StringSplitOptions.None)[0].Trim();
+                        time = publishDate.Split(separator, StringSplitOptions.None)[1].Trim();
+                    }
+                }
 
 
                 // Time
@@ -453,12 +624,12 @@ namespace CommentsParser
                     formatedDateTime = new DateTime(Int32.Parse(year), Int32.Parse(month), Int32.Parse(day), Int32.Parse(hour), Int32.Parse(minute), 0);
                 }
                 else
-                    formatedDateTime = new DateTime(Int32.Parse(date.Split('-')[2].Trim()), Int32.Parse(date.Split('-')[1].Trim()), Int32.Parse(date.Split('-')[0].Trim()), Int32.Parse(hour), Int32.Parse(minute), 0);
+                    formatedDateTime = new DateTime(Int32.Parse(year), Int32.Parse(month), Int32.Parse(day), Int32.Parse(hour), Int32.Parse(minute), 0);
 
 
                 formatedDateTime = TimeZoneInfo.ConvertTimeToUtc(formatedDateTime);
             }
-            catch
+            catch (Exception ex)
             {
                 return DateTime.MinValue;
             }

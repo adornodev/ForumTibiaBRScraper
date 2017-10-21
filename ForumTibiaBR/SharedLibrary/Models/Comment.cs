@@ -43,6 +43,8 @@ namespace SharedLibrary.Models
             this.LastCaptureDateTime  = DateTime.UtcNow;
             this.Version              = 0;
             this.NumberOfPage         = -1;
+            this.Position             = -1;
+            this.Text                 = String.Empty;
         }
     }
 }

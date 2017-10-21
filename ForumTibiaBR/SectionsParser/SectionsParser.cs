@@ -70,7 +70,7 @@ namespace SectionsParser
 
             // Trying to open the queue
             MessageQueue queue = MSMQ.OpenOrCreatePrivateQueue(Config.WebRequestConfigQueue, typeof(SectionsParser).Namespace);
-
+            
             // Sanit check
             if (queue == null)
             {
@@ -83,7 +83,12 @@ namespace SectionsParser
 
             // Serialize the objectc to take up less space
             string serializedConfig = Utils.Compress(JsonConvert.SerializeObject(Config));
-            queue.Send(serializedConfig);
+
+            Message message = new Message();
+            message.TimeToBeReceived = new TimeSpan(3 * 24, 0, 0);
+            message.Body = serializedConfig;
+
+            queue.Send(message);
         }
 
         private static bool InitializeMongo()

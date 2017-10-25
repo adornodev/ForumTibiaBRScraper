@@ -91,7 +91,7 @@ namespace CommentsParser
 
 
             Exit:
-            Console.Write("Press any key...");
+            logger.Info("Press any key...");
             Console.ReadKey();
         }
 
@@ -114,7 +114,7 @@ namespace CommentsParser
                 // No more messages?
                 if (topic == null)
                 {
-                    logger.Debug("Topic is null.");
+                    logger.Debug("No more Topic to be processed.");
                     break;
                 }
 
@@ -199,7 +199,8 @@ namespace CommentsParser
 
         private static bool DoTheWork(Topic topic, ref List<Comment> comments, WebRequests client)
         {
-            int numberOfPage = 1;
+            int numberOfPage          = 1;
+            int processedLastPosition = 0;
 
             string url             = String.Empty;
             string topicPieceUrl   = String.Empty;
@@ -245,12 +246,20 @@ namespace CommentsParser
                 HtmlNodeCollection commentsNode = htmlDoc.DocumentNode.SelectNodes(".//ol[@id='posts']//li[contains(@class,'postbitlegacy')]");
                 if (commentsNode != null && commentsNode.Count > 0)
                 {
-                    ParseComment(commentsNode, ref topic, numberOfPage, ref comments);
+                    int firstPositionFromTopic = -1;
+
+                    ParseComment(commentsNode, ref topic, numberOfPage, ref comments, ref firstPositionFromTopic);
+
+                    // Condition to know if I am on the last available page of the topic
+                    if (processedLastPosition == firstPositionFromTopic)
+                        return false;
+                    else
+                        processedLastPosition = firstPositionFromTopic;
+
 
                     if (comments.Count % 5 == 0 && comments.Count != 0)
                     {
                         SendMessage(comments);
-                        //SendMessage(CommentsQueueName, comments);
                         comments.Clear();
                     }
                 }
@@ -259,21 +268,17 @@ namespace CommentsParser
                     // Need permission to parser?
                     HtmlNode permissionNode = htmlDoc.DocumentNode.SelectSingleNode("//div[@class='blockbody formcontrols']");
                     if (permissionNode != null)
-                    {
                         logger.Warn("Permission Error to access the topic");
-                        return false;
-                    }
+                    else
+                        logger.Error("Problem to extract commentsNode. URL .: {0}", url);
 
-                    logger.Warn("Problem to extract commentsNode");
-                    numberOfPage += 1;
-                    continue;
+                    return false;
                 }
 
                 // Has more?
                 if (comments.Count > 0)
                 {
                     SendMessage(comments);
-                    //SendMessage(CommentsQueueName, comments);
                     comments.Clear();
                 }
 
@@ -285,10 +290,8 @@ namespace CommentsParser
                 {
                     string stats = statsPageNode.InnerText.Trim();
 
-                    //Regex statsRegex = new Regex(@"\s(\d{1,})\sa\s(\d{1,})", RegexOptions.Compiled);
                     Regex statsRegex = new Regex(@"\s\d{1,}\sa\s(\d{1,})\sde\s(\d{1,})", RegexOptions.Compiled);
                     match = statsRegex.Match(stats);
-
                     if (match.Success)
                     {
                         if (match.Groups.Count == 3 && match.Groups[1].Value.Trim().Equals(match.Groups[2].Value.Trim()))
@@ -327,8 +330,9 @@ namespace CommentsParser
             }
         }
 
-        private static void ParseComment(HtmlNodeCollection commentsNode, ref Topic topic, int numberOfPage, ref List<Comment> comments)
+        private static void ParseComment(HtmlNodeCollection commentsNode, ref Topic topic, int numberOfPage, ref List<Comment> comments, ref int firstPositionFromTopic)
         {
+            bool firstIteration = true;
 
             // Iterate over all CommentsNode
             foreach (HtmlNode commentNode in commentsNode)
@@ -343,14 +347,19 @@ namespace CommentsParser
                 if (textNode != null && !String.IsNullOrWhiteSpace(textNode.InnerText.Trim()))
                     comment.Text = Utils.Normalize(textNode.InnerText.Trim());
 
-
                 // Trace Message
                 //logger.Trace("Topic <{0}> ... Page: <{1}> ... Comment: {2}", topic.Title, numberOfPage, (comment.Text.Length > 20) ? String.Concat(comment.Text.Substring(0,20)," ...") : comment.Text);
 
-
                 // Extract URL and Position
                 HtmlNode urlNode = commentNode.SelectSingleNode(".//span[@class='nodecontrols']/a");
-                ExtractHrefCommentPosition(ref comment, urlNode);
+                int position = ExtractHrefCommentPosition(ref comment, urlNode);
+
+                // Set firstPositionFromTopic 
+                if (firstIteration)
+                {
+                    firstPositionFromTopic = position;
+                    firstIteration         = false;
+                }
 
                 // Sanit check
                 if (String.IsNullOrWhiteSpace(comment.Url))
@@ -452,11 +461,11 @@ namespace CommentsParser
             comment.User = user;
         }
 
-        private static void ExtractHrefCommentPosition(ref Comment comment, HtmlNode node)
+        private static int ExtractHrefCommentPosition(ref Comment comment, HtmlNode node)
         {
             // Sanit Check
             if (node == null || node.Attributes["href"] == null)
-                return;
+                return -1;
 
             // Get URL
             comment.Url = node.Attributes["href"].Value.Trim();
@@ -490,9 +499,14 @@ namespace CommentsParser
             try
             {
                 if (!String.IsNullOrWhiteSpace(node.InnerText.Trim()))
+                {
                     comment.Position = Int32.Parse(node.InnerText.Replace("#", String.Empty).Trim());
+                    return comment.Position;
+                }
             }
-            catch {  }
+            catch { }
+
+            return -1;
         }
 
         private static void InitializeAppConfig()
@@ -546,8 +560,8 @@ namespace CommentsParser
             string year     = String.Empty;
             string month    = String.Empty;
             string day      = String.Empty;
-            string hour     = "00";
-            string minute   = "00";
+            string hour     = Convert.ToString(DateTime.Now.Hour);
+            string minute   = Convert.ToString(DateTime.Now.Minute);
 
             publishDate = publishDate.Replace(",", String.Empty).ToUpper();
             DateTime formatedDateTime;
@@ -584,7 +598,6 @@ namespace CommentsParser
                         year    = publishDate.Split('-')[2];
                         month   = publishDate.Split('-')[1];
                         day     = publishDate.Split('-')[0];
-
                     }
                     else
                     {
@@ -592,7 +605,6 @@ namespace CommentsParser
                         time = publishDate.Split(separator, StringSplitOptions.None)[1].Trim();
                     }
                 }
-
 
                 // Time
                 if (time.Contains(":"))
@@ -619,13 +631,12 @@ namespace CommentsParser
                 {
                     year    = Convert.ToString(DateTime.UtcNow.Year);
                     month   = Convert.ToString(DateTime.UtcNow.Month);
-                    day     = Convert.ToString(DateTime.UtcNow.Day - 1);
+                    day     = Convert.ToString(DateTime.UtcNow.Day-1);
 
                     formatedDateTime = new DateTime(Int32.Parse(year), Int32.Parse(month), Int32.Parse(day), Int32.Parse(hour), Int32.Parse(minute), 0);
                 }
                 else
-                    formatedDateTime = new DateTime(Int32.Parse(year), Int32.Parse(month), Int32.Parse(day), Int32.Parse(hour), Int32.Parse(minute), 0);
-
+                    formatedDateTime = new DateTime(Int32.Parse(year), Int32.Parse(month), Int32.Parse(day), Int32.Parse(hour), Int32.Parse(minute), 0,DateTimeKind.Local);
 
                 formatedDateTime = TimeZoneInfo.ConvertTimeToUtc(formatedDateTime);
             }

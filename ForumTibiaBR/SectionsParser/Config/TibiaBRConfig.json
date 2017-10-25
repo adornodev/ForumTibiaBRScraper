@@ -14,6 +14,7 @@
 	"AcceptLanguage": "Accept-Language: pt-BR,pt;q=0.8,en-US;q=0.6,en;q=0.4",
 	"WebRequestConfigQueue": "ForumTibiaBR_Config",
 	"TargetQueue": "ForumTibiaBR_Sections",
+	"JustGetConfigurationMessage": false,
 	"MongoUser":"sysdba",
     "MongoPassword":"tibiabr",
     "MongoAddress":"localhost:27017",

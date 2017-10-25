@@ -11,9 +11,6 @@ namespace SharedLibrary.Models
 {
     public class User
     {
-        [BsonId]
-        [BsonRepresentation(BsonType.ObjectId)]
-        public string   _id                     { get; set; }
         [Required]
         public string   Source                  { get; set; }
         [Required]
@@ -32,6 +29,7 @@ namespace SharedLibrary.Models
         {
             this.NumberOfComments = 0;
             this.Version          = 0;
+            this.RegisterDate     = DateTime.MinValue;
         }
     }
 }

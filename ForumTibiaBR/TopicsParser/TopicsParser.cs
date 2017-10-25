@@ -88,7 +88,7 @@ namespace TopicsParser
 
 
             Exit:
-                Console.Write("Press any key...");
+                logger.Info("Press any key...");
                 Console.ReadKey();
         }
 
@@ -108,19 +108,21 @@ namespace TopicsParser
                 // Read messages from Section Queue
                 Section section = ReadQueue(SectionsQueueName);
 
+                // No more messages?
+                if (section == null)
+                {
+                    logger.Debug("No more section to be processed.");
+                    break;
+                }
+
                 logger.Trace("Processing \"{0}\" section...", section.Title);
 
                 // Parse Topics from section and Save on TopicCollection/TopicQueue
-                DoWork(section, ref topics, client);
+                DoTheWork(section, ref topics, client);
 
                 // Stopping for 30 minutes
                 Thread.Sleep(30 * 60000);
             }
-            
-            //// Taking the Sections records in the collection
-            //MongoUtilsSectionObj.GetCollection(Config.MongoCollection);
-            //List<Section> sections = MongoUtilsSectionObj.collection.AsQueryable<Section>().ToList();
-
         }
 
         private static bool InitializeMongo()
@@ -185,9 +187,9 @@ namespace TopicsParser
             queue.Dispose();
         }
 
-        private static void DoWork(Section section, ref List<Topic> topics, WebRequests client)
+        private static void DoTheWork(Section section, ref List<Topic> topics, WebRequests client)
         {
-            int numberOfPage = 1;
+            int numberOfPage = 200;
 
             string url             = String.Empty;
             string sectionPieceUrl = String.Empty;
@@ -360,7 +362,7 @@ namespace TopicsParser
                     {
                         string publishDate = Utils.Normalize(lastPostPublishDateNode.InnerText.Trim());
 
-                        DateTime dateTime = FormatDateTime(publishDate.Trim());
+                        DateTime dateTime = FormatDateTime(publishDate.Trim()).DateTime;
                         if (dateTime != DateTime.MinValue)
                         {
                             topic.LastPostPublishDate = dateTime;
@@ -403,9 +405,11 @@ namespace TopicsParser
                     topic.Author = authorNode.InnerText.Trim();
                     if (authorNode.Attributes["title"].Value.Contains("em"))
                     {
-                        string publishDate = authorNode.Attributes["title"].Value.Split(new[] { " em " }, StringSplitOptions.RemoveEmptyEntries)[1];
+                        string[] data = authorNode.Attributes["title"].Value.Split(new[] { " em " }, StringSplitOptions.RemoveEmptyEntries);
 
-                        DateTime dateTime = FormatDateTime(publishDate.Trim());
+                        string publishDate = data[data.Length-1];
+
+                        DateTime dateTime = FormatDateTime(publishDate.Trim()).DateTime;
                         if (dateTime != DateTime.MinValue)
                         {
                             topic.PublishDate = dateTime;
@@ -503,7 +507,7 @@ namespace TopicsParser
         ///  Ontem 11:58
         ///  Ontem, 11:37
         /// </summary>
-        private static DateTime FormatDateTime(string publishDate)
+        private static DateTimeOffset FormatDateTime(string publishDate)
         {
             string date     = String.Empty;
             string time     = String.Empty;
@@ -514,7 +518,7 @@ namespace TopicsParser
             string minute   = String.Empty;
 
             publishDate = publishDate.Replace(",",String.Empty).ToUpper();
-            DateTime formatedDateTime;
+            DateTimeOffset formatedDateTime;
             try
             {
                 string [] separator = new string[] { " " };
@@ -550,20 +554,17 @@ namespace TopicsParser
                     month   = Convert.ToString(DateTime.UtcNow.Month);
                     day     = Convert.ToString(DateTime.UtcNow.Day-1);
 
-                    formatedDateTime = new DateTime(Int32.Parse(year), Int32.Parse(month), Int32.Parse(day), Int32.Parse(hour), Int32.Parse(minute), 0);
+                    formatedDateTime = new DateTimeOffset(Int32.Parse(year), Int32.Parse(month), Int32.Parse(day), Int32.Parse(hour), Int32.Parse(minute), 0, TimeSpan.FromHours(-3));
                 }
                 else
-                    formatedDateTime = new DateTime(Int32.Parse(date.Split('-')[2].Trim()), Int32.Parse(date.Split('-')[1].Trim()), Int32.Parse(date.Split('-')[0].Trim()), Int32.Parse(hour), Int32.Parse(minute), 0);
-
-                
-                formatedDateTime = TimeZoneInfo.ConvertTimeToUtc(formatedDateTime);
+                    formatedDateTime = new DateTimeOffset(Int32.Parse(date.Split('-')[2].Trim()), Int32.Parse(date.Split('-')[1].Trim()), Int32.Parse(date.Split('-')[0].Trim()), Int32.Parse(hour), Int32.Parse(minute), 0, TimeSpan.FromHours(-3));
             }
             catch
             {
-                return DateTime.MinValue;
+                return DateTimeOffset.MinValue;
             }
 
-            return formatedDateTime;
+            return formatedDateTime.DateTime;
         }
     }
 }

@@ -49,6 +49,10 @@ namespace SectionsParser
             logger.Debug("Saving Configuration Fields...");
             SaveConfigurationFields();
 
+            // Do you don't wanna capture the sections?
+            if (Config.JustGetConfigurationMessage)
+                goto Exit;
+
             try
             {
                 // Main
@@ -60,7 +64,7 @@ namespace SectionsParser
             }
 
             Exit:
-            Console.Write("Press any key...");
+            logger.Info("Press any key...");
             Console.ReadKey();
         }
 

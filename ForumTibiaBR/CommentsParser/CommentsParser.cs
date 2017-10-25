@@ -312,21 +312,22 @@ namespace CommentsParser
 
         private static void SendMessage(List<Comment> comments)
         {
-
             // Iterate over all Comments
             foreach (Comment comment in comments)
             {
                 // Before inserting, we need to check if lot was already inserted and update it if this is the case
                 UpdateResult result = MongoUtilsCommentObj.collection.UpdateOne(Builders<Comment>.Filter.Eq(reg => reg.Url, comment.Url),
                                                                                 Builders<Comment>.Update
-                                                                                 .Set("TopicTitle"          , comment.TopicTitle)
-                                                                                 .Set("Text"                , comment.Text)
-                                                                                 .Set("LastCaptureDateTime" , comment.LastCaptureDateTime)
+                                                                                 .Set("TopicTitle"              , comment.TopicTitle)
+                                                                                 .Set("Text"                    , comment.Text)
+                                                                                 .Set("LastCaptureDateTime"     , comment.LastCaptureDateTime)
+                                                                                 .Set("User.NumberOfComments"   , comment.User.NumberOfComments)
+                                                                                 .Set("User.Rank"               , comment.User.Rank)
+                                                                                 .Inc(r => r.User.Version, 1)
                                                                                  .Inc(r => r.Version, 1));
                 // New Register
                 if (result.MatchedCount == 0)
                     MongoUtilsCommentObj.collection.InsertOne(comment);
-
             }
         }
 
@@ -602,7 +603,9 @@ namespace CommentsParser
                     else
                     {
                         date = publishDate.Split(separator, StringSplitOptions.None)[0].Trim();
-                        time = publishDate.Split(separator, StringSplitOptions.None)[1].Trim();
+
+                        if (publishDate.Split(separator, StringSplitOptions.None).Length >=2)
+                            time = publishDate.Split(separator, StringSplitOptions.None)[1].Trim();
                     }
                 }
 

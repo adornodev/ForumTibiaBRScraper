@@ -235,8 +235,13 @@ namespace TopicsParser
 
                     if (topics.Count % 10 == 0 && topics.Count != 0)
                     {
+                        // Send messages to Queue
+                        logger.Trace("Sending to Topics Collection...");
                         SendMessage(topics);
+
+                        logger.Trace("Sending message to Topics Queue...");
                         SendMessage(TopicsQueueName, topics);
+
                         topics.Clear();
                     }
                 }
@@ -250,8 +255,13 @@ namespace TopicsParser
                 // Has more?
                 if (topics.Count > 0)
                 {
+                    // Send messages to Queue
+                    logger.Trace("Sending to Topics Collection...");
                     SendMessage(topics);
+
+                    logger.Trace("Sending message to Topics Queue...");
                     SendMessage(TopicsQueueName, topics);
+
                     topics.Clear();
                 }
 

@@ -189,7 +189,7 @@ namespace TopicsParser
 
         private static void DoTheWork(Section section, ref List<Topic> topics, WebRequests client)
         {
-            int numberOfPage = 200;
+            int numberOfPage = 1;
 
             string url             = String.Empty;
             string sectionPieceUrl = String.Empty;

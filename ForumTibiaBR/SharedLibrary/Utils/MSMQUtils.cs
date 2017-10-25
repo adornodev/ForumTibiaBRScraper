@@ -43,7 +43,7 @@ namespace SharedLibrary.Utils
         {
 
             MessageQueue messageQueue = null;
-
+            
             // Complete Queuename
             queuename = String.Concat(MSMQPrivatePath, queuename);
 
@@ -103,27 +103,35 @@ namespace SharedLibrary.Utils
             return false;
         }
 
-        public bool SendMessage(string queuename, string Namespace, List<Object> objects)
+        public static bool SendMessage<T>(string queuename, string Namespace, List<T> objects, out string errorMessage)
         {
+            errorMessage   = String.Empty;
             MSMQUtils MSMQ = new MSMQUtils();
-
+            
             // Trying to open the queue
             MessageQueue queue = MSMQ.OpenOrCreatePrivateQueue(queuename, Namespace);
-
+            
             // Sanit check
             if (queue == null)
+            {
+                errorMessage = String.Format("Error to Open or Create {0} Queue", queuename);
                 return false;
+            }
 
             try
             {
                 // Iterate over all objects
-                foreach (Object obj in objects)
+                foreach (T obj in objects)
                 {
                     string serializedObj = Utils.Compress(JsonConvert.SerializeObject(obj));
                     queue.Send(serializedObj);
                 }
             }
-            catch (Exception ex) { return false; }
+            catch (Exception ex)
+            {
+                errorMessage = ex.Message;
+                return false;
+            }
 
             queue.Dispose();
 

@@ -10,38 +10,38 @@ namespace SharedLibrary.Models
     public class InputConfig
     {
         [Required]
-        public string ProcessName           { get; set; }
+        public string ProcessName                   { get; set; }
         [Required]
         [Url]
-        public string InitialUrl            { get; set; }
+        public string InitialUrl                    { get; set; }
         [Required]
-        public string SectionXPath          { get; set; }
-        public string SectionsList          { get; set; }
+        public string SectionXPath                  { get; set; }
+        public string SectionsList                  { get; set; }
         [Required]
-        public string Host                  { get; set; }
-        public bool   KeepAlive             { get; set; }
+        public string Host                          { get; set; }
+        public bool   KeepAlive                     { get; set; }
         [Required]
-        public string Accept                { get; set; }
+        public string Accept                        { get; set; }
         [Required]
-        public string UserAgent             { get; set; }
-        public string ContentType           { get; set; }
+        public string UserAgent                     { get; set; }
+        public string ContentType                   { get; set; }
         [Required]
-        public string Charset               { get; set; }
-        public int    Timeout               { get; set; }
+        public string Charset                       { get; set; }
+        public int    Timeout                       { get; set; }
         [Required]
-        public string AcceptEncoding        { get; set; }
+        public string AcceptEncoding                { get; set; }
         [Required]
-        public string AcceptLanguage        { get; set; }
+        public string AcceptLanguage                { get; set; }
         [Required]
-        public string WebRequestConfigQueue { get; set; }
+        public string WebRequestConfigQueue         { get; set; }
 
-        public string TargetQueue           { get; set; }
-
-        public string MongoUser             { get; set; }
-        public string MongoPassword         { get; set; }
-        public string MongoAddress          { get; set; }
-        public string MongoDatabase         { get; set; }
-        public string MongoCollection       { get; set; }
+        public string TargetQueue                   { get; set; }
+        public bool   JustGetConfigurationMessage   { get; set; }
+        public string MongoUser                     { get; set; }
+        public string MongoPassword                 { get; set; }
+        public string MongoAddress                  { get; set; }
+        public string MongoDatabase                 { get; set; }
+        public string MongoCollection               { get; set; }
 
         public bool VerifyMandatoryFields(InputConfig Config)
         {

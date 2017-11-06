@@ -103,13 +103,12 @@ namespace SectionsParser
             if (!MongoUtilsObj.IsValidMongoData(Config))
                 return false;
 
-            // Invalid Collection?
+            // Is There no collection?
             if (!MongoUtilsObj.CollectionExistsAsync(Config.MongoCollection).Result)
-                return false;
+            {
+                MongoUtilsObj.CreateCollection(Config.MongoCollection);
+            }
 
-            // Open the Connection
-            MongoUtilsObj.GetCollection(Config.MongoCollection);
-  
             return true;
         }
 

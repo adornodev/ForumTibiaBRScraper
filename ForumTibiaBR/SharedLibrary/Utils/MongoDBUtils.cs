@@ -66,12 +66,29 @@ namespace SharedLibrary.Utils
             return success;
         }
 
+        public bool CreateCollection(string collectioName)
+        {
+            // Sanit Check
+            if (String.IsNullOrWhiteSpace(_dbName) || collection == null)
+                return false;
+
+            try
+            {
+                collection.Indexes.CreateOne(new BsonDocument("MainUrl", -1), new CreateIndexOptions {Background = true });
+            }
+            catch { return false; }
+
+            return true;
+        }
+
         public async Task<bool> CollectionExistsAsync(string collectionName)
         {
             var filter = new BsonDocument("name", collectionName);
 
             // Filter by collection name
             var collections = await GetDatabase(null).ListCollectionsAsync(new ListCollectionsOptions { Filter = filter });
+
+            GetCollection(collectionName);
 
             // Check for existence
             return await collections.AnyAsync();
